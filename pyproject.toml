@@ -8,7 +8,11 @@ version = "0.1.0"
 description = "Local photo grading with learned color lookup tables"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+  "torch>=2.8,<2.9",
+  "numpy>=1.26,<3",
+  "Pillow>=11.2,<12",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9", "ruff>=0.12"]

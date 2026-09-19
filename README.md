@@ -1,6 +1,6 @@
 # Selective Grade
 
-A local photo-grading project. Package layout, dependency lock, and development tools.
+sRGB conversion and a differentiable eight-corner LUT renderer. Includes identity, interpolation, gradient, and gamut checks.
 
 Python 3.11; install with `uv sync --locked --extra dev`.
-Run `uv run --no-sync photograder --version` to verify the package scaffold.
+Run `pytest -q` for the checks available at this stage.
