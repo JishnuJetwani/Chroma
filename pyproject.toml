@@ -12,9 +12,11 @@ dependencies = [
   "torch>=2.8,<2.9",
   "numpy>=1.26,<3",
   "Pillow>=11.2,<12",
+  "requests>=2.32,<3",
 ]
 
 [project.optional-dependencies]
+data = ["pypng>=0.20220715.0"]
 dev = ["pytest>=8,<9", "ruff>=0.12"]
 
 [project.scripts]

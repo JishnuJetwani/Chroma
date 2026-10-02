@@ -1,0 +1,891 @@
+{
+  "format_version": 1,
+  "name": "fivek_multistyle",
+  "original_manifest": "data/fivek_multistyle/manifest.jsonl",
+  "original_manifest_sha256": "92a13039f90d8d539e68cd08dc9c183fac220af3fa95a8dc33b5a9544d19b6c6",
+  "source_provenance": {
+    "dataset": "MIT-Adobe FiveK additional experts",
+    "index_url": "https://data.csail.mit.edu/graphics/fivek/",
+    "source_manifest_sha256": "abf37ff4b8935147ab21e2ce34358222c489ecc6f6156eb40dcfba3ad6591131",
+    "rendering": "Official16-bit ProPhotoRGB TIFF->macOS ColorSync nativeICC transform->8-bit sRGB TIFF->LANCZOS resize to existinginput->PNG"
+  },
+  "styles": {
+    "0": "FiveK Expert C",
+    "1": "FiveK Expert A",
+    "2": "FiveK Expert B"
+  },
+  "splits": {
+    "train": [
+      "fivek:a0040",
+      "fivek:a0041",
+      "fivek:a0043",
+      "fivek:a0045",
+      "fivek:a0047",
+      "fivek:a0050",
+      "fivek:a0057",
+      "fivek:a0078",
+      "fivek:a0080",
+      "fivek:a0083",
+      "fivek:a0086",
+      "fivek:a0109",
+      "fivek:a0118",
+      "fivek:a0123",
+      "fivek:a0124",
+      "fivek:a0125"
+    ],
+    "val": [
+      "fivek:a0069",
+      "fivek:a0079",
+      "fivek:a0252",
+      "fivek:a0253"
+    ],
+    "test": [
+      "fivek:a0055",
+      "fivek:a0094",
+      "fivek:a0097",
+      "fivek:a0120"
+    ]
+  },
+  "expected_rows": [
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0040",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "0f879734c33b73f5f8c2604ce42511bd1071e38db7007653d298d3c59991938d",
+        "target": "f2e06fb6d0e60324e3de57a2c07eb3a1a551cbcc4d5e12d6b83fae0c9600f494"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0041",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "b699a5beef8dfc89f2189083c43812867bf694d11b18a1bc47ce3442597bb1e7",
+        "target": "ff0cf7079d6a4fb8106fc5365c2282f6e304f3452f4a0e7156c96cb0fb86d3fe"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0043",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "3ff2ded7343275d7b0c54923fe5b7a22dd3e624cf60734b52626d7c83303f149",
+        "target": "d657ed2e12e0e94bd488d7c9f8eac64929495fcd4c69a5d9bfd62e2c7e37fd23"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0045",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "efc4a55a284e66d8e92bb1dcd1402d9963f62c5fa8d8f1e4d5cad219faa79141",
+        "target": "b716e5de9c3a8e0d43d4b4176fd4ca806c176dc0ae304f6b0b6be038589d5f9c"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0047",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "ae5a7479fc46afafbc4b7a9799a037a0d3cae480b7ded401810962c62608bc25",
+        "target": "b8f4416abca818dbc759de516f943c58ddb8aa3131f194d6700d958a504483ce"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0050",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "ca71c7e37036e85ec4b4b918cb809b4bb0a82422fa1b48de4fd7e9153208ec67",
+        "target": "593f8d4740effe858204cbe666e03baaa49df8d44537379e5232f53e3eca5efa"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0057",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "541ae9c78aa1abd027ab3b4004ddcb4ca1f8fb79033795cab890f75f723546ee",
+        "target": "dff868177c9cf95f924bdb1aabded337719be4786aabae55d94fd7bb78cd7ccc"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0078",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "39f701e98ef2d0f9e0f0647656436b7cb36a657b016550750f082550c3d9f76e",
+        "target": "83a0043e2f4dbb813dec2a5589a61d2927ae2f8adf42b394a4857bfd58c6a893"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0080",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "bc0ce38340c32c5ab8d3d85b243a607f71bbdd68dc81ac77aeb245b0120e5551",
+        "target": "51e64b90d66e75d263fa6df7fe43d5c01771e59408ef8f41ffed602552298a4d"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0083",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "aa5621970ecf37785a1119259c30cd63a6b8c4ca54a5b8b3c73f255945232b5d",
+        "target": "584fe3bc0dae5a1b6393c4e5b438f701a5e4fc8a2ba2b918b73efe6a3773a175"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0086",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "757d2cae0ba203597640951359e12d30019c0eef64b2a20ba2cf661b83b446aa",
+        "target": "b78e0750315b9856c9cf88108efdbadfe1955becb059e447ca672489357e6fcb"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0109",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "3260a1cf4a1433a231f98d9f7e455ce699c075d2dcd0dd18b968ed4748d6ed66",
+        "target": "74d5fb0d57a2a17bafb118cec64d7ddc9efde053b9e5d40ad972661bae59d68f"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0118",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "2ecaeeffee882ea8b0e6745f43ca61716b877eae25b752df78581cc8c4bc525d",
+        "target": "0e4028c921a5452460d4bbf70acf2c2ae5f1bea889fbaa4cafb72566cd97cd4d"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0123",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "827b4aab4120444624257ba93f9f52d4bb63d07acc09ea36414418dfb549ef98",
+        "target": "bd3aa95417bb51991c0902196be1ea4b2544002157999ff3fbc8a6f8812ef739"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0124",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "6e61c1befec635ea5488c0e0619d4b4fbd104b4a4636506e80c6c2c427960ae2",
+        "target": "c36e517dc0746f1f9fe68f567abe088eec1983e9c7086574e60031c8d29c818a"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0125",
+      "split": "train",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "bf4470db212b5557de2e7b8ea4cb5e0a28a69a7aec8833a44a197712fec985c7",
+        "target": "6b2739b06694f2a4fec89849b8eaffc13f5ac499049b14d006d8739a9abe138d"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0069",
+      "split": "val",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "203f986d4388b9dfbb1c7a34cbfe3edcf85f955589de9222dff8a9aa88955f2a",
+        "target": "956c45ddf44013011b8e3c7c56e7c1929b0e2e8f1c4bb40d032d49eef2d3b322"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0079",
+      "split": "val",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "4bba3aa775eeed854974eb04cfa521531fe89a3d58fcaa8dca8739274a42dd95",
+        "target": "4066df13e7daa9af4ee7ae6e38f16665f794e51aebb27da61054df4f1dce8098"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0252",
+      "split": "val",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "ff2e65c0820c37ae47c0859e8033123192ee2fae5aa43818dbe96d8977c1e98a",
+        "target": "29880be8267e340574cdb44d0f31c12884bdd7c4dbb3f99ed901cc4238f89377"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0253",
+      "split": "val",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "a91d0c3356ac3675791bb0f60f66b42448cb262d0bf47b43ffddc80c3a527cf3",
+        "target": "f6b7cf6cc195e12d9d228226be1cebfe0e5e092c90d0be7e1534d65000cd358e"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0055",
+      "split": "test",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "4089f75f0945931963d8e6a03c105edc84ec9b33b4a03a88e9694a93182b2d7e",
+        "target": "2acb0ca891c65b1fc4be4a29269450b1dffaefdd29e192e3312678fc412c432c"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0094",
+      "split": "test",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "ceffec250dcf262b15bc86ddeef51640ae7056c9d76227b0036537ed2447e0a5",
+        "target": "b1944877537b12af81be0c96005c64fa4d2f3bbf77b4d19a67aa805078bd50f8"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0097",
+      "split": "test",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "1d21854f38980814221206b0580a41013b8cdb2edc971026463d05e34287fd1d",
+        "target": "58055ebbe95b48870174d62fa72d13000ea0c98bdb1d2a1956bc87b0e0140acb"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0120",
+      "split": "test",
+      "style_id": 0,
+      "render_version": "HuiZeng-480p-srgb-jpeg-exif-v1",
+      "sha256": {
+        "input": "4e81dda847e7754c362bb6431a83f55a2cae13188d00c2d86b9825b16ed72846",
+        "target": "277c4494ee6a2eb299d41ec726e243c6a55cf466c02f9d437142367d38f26957"
+      }
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0040",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "0f879734c33b73f5f8c2604ce42511bd1071e38db7007653d298d3c59991938d",
+        "target": "3ed02a6617ef1dea2aff653e0a222d618f9cdfc0d3aaf45dbcfb3cbc5ff5b3f8"
+      },
+      "source_target_sha256": "44d5854378ea7ad2c587da18ab958dda3f5315f70144be3e5e6486d18a4143ca"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0040",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "0f879734c33b73f5f8c2604ce42511bd1071e38db7007653d298d3c59991938d",
+        "target": "db9d8f4a40566c810b9ec8663818453cd460ff6bd9b936246723cf3d011393ef"
+      },
+      "source_target_sha256": "c1e4232b4552c6e41f40c549778ded6eb3f36a29d9b1e7f620f0edb09aab4cf1"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0041",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "b699a5beef8dfc89f2189083c43812867bf694d11b18a1bc47ce3442597bb1e7",
+        "target": "ee9fa82f91353a65db8351b36fd739a41bcb14b25f23f378f551ea647c963355"
+      },
+      "source_target_sha256": "ec0c43e6d7604e818a73e112c306d8705059b78cbbf3f91e1d6dd2d18f1ba18a"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0041",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "b699a5beef8dfc89f2189083c43812867bf694d11b18a1bc47ce3442597bb1e7",
+        "target": "c1b52db1af283c57cdcb55443e58fd1239c598ceb87c3090644d1d140d1dafa6"
+      },
+      "source_target_sha256": "12b4872c8825010b477812137127e3fb6c57edd94f172834f55ab6cfacd9f39d"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0043",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "3ff2ded7343275d7b0c54923fe5b7a22dd3e624cf60734b52626d7c83303f149",
+        "target": "2e8ac9ab66a74a389da8736bde08d25f7d7b2c39ea28a58e0f73adf9c2a7c09c"
+      },
+      "source_target_sha256": "17721af4086eecde2509f4a9de54ad6942009c2d50682ccd6458abbc6e796bf8"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0043",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "3ff2ded7343275d7b0c54923fe5b7a22dd3e624cf60734b52626d7c83303f149",
+        "target": "05f946b41ff553b242a059f664260a26c2a31575f7aa9f4cc4ac730c3039e059"
+      },
+      "source_target_sha256": "371fde6d599ec71b5cf50116e88a72c92dd9385cd606f1d838467d4bc3039490"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0045",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "efc4a55a284e66d8e92bb1dcd1402d9963f62c5fa8d8f1e4d5cad219faa79141",
+        "target": "ca1dff054313fd9818883923a5bd6bb6715d026e16b7f44694b03b401fe6c7df"
+      },
+      "source_target_sha256": "cdd8aafff456a2c646701de6248e24562f54775476d7873879f3f1856113a57e"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0045",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "efc4a55a284e66d8e92bb1dcd1402d9963f62c5fa8d8f1e4d5cad219faa79141",
+        "target": "d94565e2814a41f4599669cf9e56aa2b2754cb9fa208d1ce722a17580859302d"
+      },
+      "source_target_sha256": "799d54fcc60130f0f3405a339c4c3839c6a367f0638343dab02a685249f9851f"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0047",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "ae5a7479fc46afafbc4b7a9799a037a0d3cae480b7ded401810962c62608bc25",
+        "target": "d46d8bd80903cbd71fe82cb9a905949e9b59c7ccc5191bd2d75f934edaf2c353"
+      },
+      "source_target_sha256": "32ae36973d84b4707cca0e748045691c0e67ac7232b674a2184ef5543e0fcbd3"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0047",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "ae5a7479fc46afafbc4b7a9799a037a0d3cae480b7ded401810962c62608bc25",
+        "target": "0ebf2a8ba946ce34b80c28b9b35fd91faa3ff49c7481d45ceff2f8a061de2c5b"
+      },
+      "source_target_sha256": "379eac2a8b6bd754b25a06054ded5ca298e9758b69867e89e516e92e88e258be"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0050",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "ca71c7e37036e85ec4b4b918cb809b4bb0a82422fa1b48de4fd7e9153208ec67",
+        "target": "5f5adc3460ac2638f901fa3b4e005b27b17f740f281b94ef619fabb2d057765e"
+      },
+      "source_target_sha256": "9ce16a2f6d202a113bfb2b422fc81c3fe2db99ad52b79106e082dfcdbdd57d87"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0050",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "ca71c7e37036e85ec4b4b918cb809b4bb0a82422fa1b48de4fd7e9153208ec67",
+        "target": "f18dcba08076ab54ee0e3faffcb685be14cf2920ded3047a751345dbc2ece6d8"
+      },
+      "source_target_sha256": "dd0314dd0cb89f76b6e52d9be1355c88219a5a6f32ada220459a14bd3c2bd0c0"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0057",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "541ae9c78aa1abd027ab3b4004ddcb4ca1f8fb79033795cab890f75f723546ee",
+        "target": "102ed90c1945d3d2534c36599c1f9cbb12883d2d1a695329f62077bb8315ee8c"
+      },
+      "source_target_sha256": "163383551a0744426fa581186508dd64965087a7d22bbb1a3db3eab855c09c5a"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0057",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "541ae9c78aa1abd027ab3b4004ddcb4ca1f8fb79033795cab890f75f723546ee",
+        "target": "c9b0b82898b61707684a137f234d530428023b16e3fd648319cd2cf92a65ed28"
+      },
+      "source_target_sha256": "ce469885d608bea86d4b1c1857d85e8833d56f4b900be5606235f2a817366336"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0078",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "39f701e98ef2d0f9e0f0647656436b7cb36a657b016550750f082550c3d9f76e",
+        "target": "5fd523eabe575655023c85df18aa223f414580572797aeccc59f6a81e390d2b0"
+      },
+      "source_target_sha256": "370c8bcb0697ee460b485a49e9be4280cf586bbe20ff6b0a84d0b608a71c4556"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0078",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "39f701e98ef2d0f9e0f0647656436b7cb36a657b016550750f082550c3d9f76e",
+        "target": "26acc3f316c4946d667cc49d779a9ef3d2772916e7f9d1f07712182124a13dcf"
+      },
+      "source_target_sha256": "fd99fa5ec22e0b0ebc2c0b07f4dacf7e42a8fb062110869201bf7701881b0139"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0080",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "bc0ce38340c32c5ab8d3d85b243a607f71bbdd68dc81ac77aeb245b0120e5551",
+        "target": "8baf965e4010b70d0facc29358a344c768f396f6ab8f0a7fc381c1bce281dbd4"
+      },
+      "source_target_sha256": "1790899a53b41668f4632900242475fe9a9b5ff30e0ef3820b5e49dd90ce098d"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0080",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "bc0ce38340c32c5ab8d3d85b243a607f71bbdd68dc81ac77aeb245b0120e5551",
+        "target": "605422bb12b5f03984749ddd1817e1f532cdbdbc7f309cd1d9f927698be8e1d4"
+      },
+      "source_target_sha256": "df5e3aed8a30ae965a92f97c8ff2ae6dd461d5158de4a32f0c5a36621efb6438"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0083",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "aa5621970ecf37785a1119259c30cd63a6b8c4ca54a5b8b3c73f255945232b5d",
+        "target": "46d1945b00b7f6ad31638a5a6f5d15fdee4c31c3b37a587f93a1cc94a9a2f2f3"
+      },
+      "source_target_sha256": "d5a2bd0869cc67de85820d4523c252c5fe8198e95d99c339b3b48734665e9f9d"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0083",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "aa5621970ecf37785a1119259c30cd63a6b8c4ca54a5b8b3c73f255945232b5d",
+        "target": "6c1eff09277e841979e588ad91e858e1fceff3aaa1c2cb9e7cda61337d2791dc"
+      },
+      "source_target_sha256": "566e7214b52673598a2a65ee1ed733f49c48be2853782a7d0013574de23680c4"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0086",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "757d2cae0ba203597640951359e12d30019c0eef64b2a20ba2cf661b83b446aa",
+        "target": "5faba1752cb746c0f906178f658c89c7f660680ad55447aa84f0d3e305b80a5b"
+      },
+      "source_target_sha256": "873651b0d5cd4e18b5e11c0a9856afc3460e734b2904df510a19e5579f519700"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0086",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "757d2cae0ba203597640951359e12d30019c0eef64b2a20ba2cf661b83b446aa",
+        "target": "ee96eb13a8b795afa54a4b890de3d9b34a956e6c466cfda1280803bf0c8211b7"
+      },
+      "source_target_sha256": "458a56a0a50f6892fb66b1298f310a7850dbbbbb9fba3949abe322fdce684836"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0109",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "3260a1cf4a1433a231f98d9f7e455ce699c075d2dcd0dd18b968ed4748d6ed66",
+        "target": "6d5fc828a3f75b093c1308aaed3d0eb56973bf4cb9a2d87b741f02040c42db04"
+      },
+      "source_target_sha256": "84498cc13ba30e2af1f61e0198c561196c50360665be66d9b039ab45121208ea"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0109",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "3260a1cf4a1433a231f98d9f7e455ce699c075d2dcd0dd18b968ed4748d6ed66",
+        "target": "947541173f89b3c4d66b86f714300aee62c4e49045ec532f007e5ef9521cced2"
+      },
+      "source_target_sha256": "65969e7fa5750ec8c43e52a1b5ba908e39ad45433db9b430b5643e0ed640b431"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0118",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "2ecaeeffee882ea8b0e6745f43ca61716b877eae25b752df78581cc8c4bc525d",
+        "target": "1a2b72dae3feceab7785979a461f5b1e9d8b4da35952b68beac131edc80472c4"
+      },
+      "source_target_sha256": "cfa659de11c8e5c6eff4aa85638c1eae9b2b84025c086b02f0f7fe7f12b737b3"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0118",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "2ecaeeffee882ea8b0e6745f43ca61716b877eae25b752df78581cc8c4bc525d",
+        "target": "46def72b3e890aa9fe5ec67d0912fe55722e872a1360ab68173fc422504edd99"
+      },
+      "source_target_sha256": "470f1426318d63230740c1acd7f8a5270c59489bb33ae260cfd98b01c02cdc79"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0123",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "827b4aab4120444624257ba93f9f52d4bb63d07acc09ea36414418dfb549ef98",
+        "target": "430780c354be53dbc9b07a0cbe810431f195b3fefc39739ac2bbe9325de71447"
+      },
+      "source_target_sha256": "104d5153e541fcd935a46f26d1242b8395779c38273a2f9b24e476680d0179db"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0123",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "827b4aab4120444624257ba93f9f52d4bb63d07acc09ea36414418dfb549ef98",
+        "target": "d210162582f9f1b2254d2d53494b831f0bdff0a0b2ff670ee41e3db7c9c1928c"
+      },
+      "source_target_sha256": "d4d7f47bdf0267613ffb42ec50e8261c0b02b1144e0c2609d6794503cde66b70"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0124",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "6e61c1befec635ea5488c0e0619d4b4fbd104b4a4636506e80c6c2c427960ae2",
+        "target": "7d85a1c9df5f141671cead9b373f3c3688e902806e42d584e25d1974307e981e"
+      },
+      "source_target_sha256": "c719d523f260ddd7c37ad86cb4d37b8c8b58de33e04cd439e9b7a33198c8c6f2"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0124",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "6e61c1befec635ea5488c0e0619d4b4fbd104b4a4636506e80c6c2c427960ae2",
+        "target": "566f6f46c7307a47798712a66d2e85a48530a8465fd9e616c696c0bd6b5ff6e2"
+      },
+      "source_target_sha256": "1fe2f7bfab20d4d7c8213ade288cdb6ceb0bdb19bb2932ab64b8169f65472dbf"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0125",
+      "split": "train",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "bf4470db212b5557de2e7b8ea4cb5e0a28a69a7aec8833a44a197712fec985c7",
+        "target": "39b75d3e1ef746531220f1ed9e4193f2ecaca497781c88d0ad87ca22f639193a"
+      },
+      "source_target_sha256": "05f1816bf0b7c4183bb199a791489bd4d09090e587073b3eaa3a451c1b7340b0"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0125",
+      "split": "train",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "bf4470db212b5557de2e7b8ea4cb5e0a28a69a7aec8833a44a197712fec985c7",
+        "target": "45805ae52ed0236c444ca45569d462b8a565ba45404cab4ed7e1be05dd80f4f7"
+      },
+      "source_target_sha256": "b5a3f178f2915eae5e9d1fdd94196d83fe5eb0bfa9427111a2f958fcf39372e9"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0069",
+      "split": "val",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "203f986d4388b9dfbb1c7a34cbfe3edcf85f955589de9222dff8a9aa88955f2a",
+        "target": "f1b8fb20367dc28480470f8f186e5b07956ad8167147344252dd5f11637fe647"
+      },
+      "source_target_sha256": "e0be4c18c50cbb86973b57345aecd219821ff5f0c93ce0b64b3b5781f0c2887c"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0069",
+      "split": "val",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "203f986d4388b9dfbb1c7a34cbfe3edcf85f955589de9222dff8a9aa88955f2a",
+        "target": "dc394c9162b29d4311286e3b1c3c29eb985ef28684f745d9ab05ee41269fd26c"
+      },
+      "source_target_sha256": "7771e360138ffe466e041b85ae04f897e90e499e3348322589fd73aedf8ef0f2"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0079",
+      "split": "val",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "4bba3aa775eeed854974eb04cfa521531fe89a3d58fcaa8dca8739274a42dd95",
+        "target": "ac47397221332ae36e432f99bb107a6b7f06384bbf3af849d9f8a0347aac3b33"
+      },
+      "source_target_sha256": "4e0892eb24637b170ecb3c067e3837c790911160399b38068ff1b15160ecac94"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0079",
+      "split": "val",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "4bba3aa775eeed854974eb04cfa521531fe89a3d58fcaa8dca8739274a42dd95",
+        "target": "77b47a9147d26215e7c4f86130421717ae77f240cc940578af40e1203e23be1a"
+      },
+      "source_target_sha256": "df2d88a0da7f840efb3d63d0570653a5a7596c335aa787103ad773fb1f062b2b"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0252",
+      "split": "val",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "ff2e65c0820c37ae47c0859e8033123192ee2fae5aa43818dbe96d8977c1e98a",
+        "target": "45f59296024213ad0787e12907bb35ff1bd2ca4da5e4d1a041044a6ac95b9384"
+      },
+      "source_target_sha256": "61082d1c16271d310a56647cc493d68ef9cb8bd2297c704ca8eb3a115cc79e6a"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0252",
+      "split": "val",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "ff2e65c0820c37ae47c0859e8033123192ee2fae5aa43818dbe96d8977c1e98a",
+        "target": "33ba2b5d29cc982876d04fa6e0e8522d4ddb2ca2da3d72592762214afdd48e6e"
+      },
+      "source_target_sha256": "252565761edb960c312daab22cc866d13c58e2d673cd56342b2c94cc80a545cd"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0253",
+      "split": "val",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "a91d0c3356ac3675791bb0f60f66b42448cb262d0bf47b43ffddc80c3a527cf3",
+        "target": "d04ec2fa5f97f373bae312d658f829d02339d2bcd12857615fa3af3f29426cec"
+      },
+      "source_target_sha256": "f8ce6d301739fdfe6c3472e40a2ce325f8a495ad7d71976569f07bf324c50eab"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0253",
+      "split": "val",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "a91d0c3356ac3675791bb0f60f66b42448cb262d0bf47b43ffddc80c3a527cf3",
+        "target": "95569deec50fd46d51bb839245417b43d6320dfa00288f651cdb7c7013aa10bb"
+      },
+      "source_target_sha256": "778d192f387e2d8e9ae2405778bc85fee89e3d552baf0bdadad163c06e48fb66"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0055",
+      "split": "test",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "4089f75f0945931963d8e6a03c105edc84ec9b33b4a03a88e9694a93182b2d7e",
+        "target": "03ef079ce4df86f08117f139f9958d1e0e9ce422ace7cfb38a0063ffdcfc2c87"
+      },
+      "source_target_sha256": "7a93e9b54accc3d5e345c54e2b3a1f3f1e31403c3ded647ac646117f63888a23"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0055",
+      "split": "test",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "4089f75f0945931963d8e6a03c105edc84ec9b33b4a03a88e9694a93182b2d7e",
+        "target": "bce8afdb0d51be81097c52bc3836f341620e6a86eb37afcd067f35b3d0ae7467"
+      },
+      "source_target_sha256": "42894c6905c84672f1a6068e6997a82297bb3c49207509fe46f0ff767c8165f2"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0094",
+      "split": "test",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "ceffec250dcf262b15bc86ddeef51640ae7056c9d76227b0036537ed2447e0a5",
+        "target": "83fc5dcc18dc1217e2e8bded478de653ffc5e7ff0020aaaa6d3e6d0727594a9f"
+      },
+      "source_target_sha256": "c058bcfcc44492b4c1b87f52f09f8ccebcd1200e1e77dce69fa225b3cffbf139"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0094",
+      "split": "test",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "ceffec250dcf262b15bc86ddeef51640ae7056c9d76227b0036537ed2447e0a5",
+        "target": "79cf369798c1b2726cedddcac34c3df458f22bab17d557c4122cd7cef44064b4"
+      },
+      "source_target_sha256": "e3cc0679fd77d419df4316b44d5cfd8b39509f458301ddc9213e23d0b30a09e1"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0097",
+      "split": "test",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "1d21854f38980814221206b0580a41013b8cdb2edc971026463d05e34287fd1d",
+        "target": "717d9702723cf3e5107ea0d315285a2e15bed9171c9a68de6b942fa029bfceec"
+      },
+      "source_target_sha256": "0dbe60644ce59409d358abe3f4c4b0e2a3406692a3f5c7c1e854279efd835a1d"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0097",
+      "split": "test",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "1d21854f38980814221206b0580a41013b8cdb2edc971026463d05e34287fd1d",
+        "target": "9985b98a1a63b5fd310c0095bc60e7e8a1693618555edea47e379ce6a6b7864c"
+      },
+      "source_target_sha256": "f3b6c8d23f2acd3623251a31a1a7e964d68c3ad760dc72e9f64b79cab6db76d8"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0120",
+      "split": "test",
+      "style_id": 1,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "4e81dda847e7754c362bb6431a83f55a2cae13188d00c2d86b9825b16ed72846",
+        "target": "70271d4ce4a46aaf96dbd29c378f0376f1c9f8456162f12838ef618c256c9a2e"
+      },
+      "source_target_sha256": "724e68dba9110abe1a5582fdbe6a2fabb7a82475074e11763b00b465ab995c34"
+    },
+    {
+      "source_id": "MIT-Adobe-FiveK",
+      "scene_id": "fivek:a0120",
+      "split": "test",
+      "style_id": 2,
+      "render_version": "fivek-colorsync16input-srgb8-lanczos-v1",
+      "sha256": {
+        "input": "4e81dda847e7754c362bb6431a83f55a2cae13188d00c2d86b9825b16ed72846",
+        "target": "46c3e4c0a31940674732dee64943082c1f7e8cbac06f3fa60ef561682768aa0a"
+      },
+      "source_target_sha256": "8e472238d3de0f08f788ce1b2512f0ceb223f1e6939b404f5fffb56f4a552b5f"
+    }
+  ]
+}
