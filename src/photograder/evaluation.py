@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
-from .metrics import clipping_metrics, per_image_metrics, scene_bootstrap
+from .metrics import clipping_metrics, locality_metrics, noop_metrics, per_image_metrics, scene_bootstrap
 
 
 def _sync(device) -> None:
@@ -75,12 +75,14 @@ def evaluate(
     protocol: dict | None = None,
     max_batches: int | None = None,
     save_images: bool = False,
+    include_controls: bool = False,
     seed: int = 42,
     bootstrap_samples: int = 2000,
 ) -> dict:
     """Evaluate the loader as supplied; never silently change its split or resize policy.
 
-    Reports include input and model agreement with paired expert targets.
+    Optional controls apply held-out synthetic perturbations to original inputs
+    and report same-style output drift. They are not real local annotations.
     """
     if max_batches is not None and max_batches < 1:
         raise ValueError("max_batches must be positive")
@@ -117,6 +119,47 @@ def evaluate(
                     }
                 )
                 values.update(clipping_metrics(prediction, image, valid_mask))
+                if include_controls:
+                    from .corruptions import CORRUPTION_VERSION, corrupt_batch
+
+                    control = corrupt_batch(
+                        image,
+                        seed=seed + batch_index,
+                        families=("edge_aware",),
+                        allow_identity=False,
+                        valid_mask=valid_mask,
+                        allow_combinations=True,
+                    )
+                    corrupted = control["image"].to(device)
+                    support = control["mask"].to(device)
+                    if support.ndim == 3:
+                        support = support.unsqueeze(1)
+                    if valid_mask is not None:
+                        support = support * valid_mask
+                    clean_graded = prediction
+                    corrupt_graded = _forward(model, corrupted, style, valid_mask)
+                    values.update(
+                        {
+                            "control_" + key: value
+                            for key, value in locality_metrics(
+                                clean_graded,
+                                corrupt_graded,
+                                corrupted,
+                                target,
+                                support,
+                                valid_mask=valid_mask,
+                            ).items()
+                        }
+                    )
+                if "is_noop" in batch:
+                    noops = noop_metrics(prediction, image, valid_mask)
+                    flags = torch.as_tensor(batch["is_noop"], device=device).bool()
+                    values.update(
+                        {
+                            key: torch.where(flags, value, torch.full_like(value, float("nan")))
+                            for key, value in noops.items()
+                        }
+                    )
                 for index in range(len(image)):
                     number = len(rows)
                     row = {
@@ -164,6 +207,21 @@ def evaluate(
         "timing_note": "Synchronized model-only batch timing; includes first-call warmup, excludes decoding, metrics, controls and encoding. Not full-resolution unless loader is full-resolution.",
         "metric_version": "srgb-metrics-v2-valid-ssim",
         "metric_note": "Encoded sRGB [0,1]; PSNR ceiling 120 dB; SSIM v2 Gaussian 11/1.5 (shrunk for small inputs), population covariance, reflect padding and fully valid windows (every support pixel mask>=1-1e-6); D65 Lab CIE76 (not CIEDE2000). Equal-weight scene bootstrap CIs. Empty masks/no fully valid SSIM windows omitted, not scored zero.",
+        "controls": {
+            "version": CORRUPTION_VERSION,
+            "source": "original paired input",
+            "reference": "paired human target",
+            "families": ["edge_aware"],
+            "allow_combinations": True,
+            "allow_identity": False,
+            "valid_mask": "excluded from corruption and all region statistics",
+            "seed_rule": "seed + batch index; record batch size for exact replay",
+            "seed": seed,
+            "boundary_radius": 5,
+            "interpretation": "Same-style F(original) vs F(corrupted original). Synthetic held-out generator; not real defect annotations. It is held out only if training used the default family list.",
+        }
+        if include_controls
+        else None,
     }
     if checkpoint and Path(checkpoint).is_file():
         digest = hashlib.sha256()

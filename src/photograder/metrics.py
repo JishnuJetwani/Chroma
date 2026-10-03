@@ -65,7 +65,7 @@ def ssim(
     _validate_pair(prediction, target)
     if window_size < 1 or sigma <= 0:
         raise ValueError("window_size and sigma must be positive")
-    a, b = (prediction.float(), target.float())
+    a, b = prediction.float(), target.float()
     size = min(window_size, a.shape[-2], a.shape[-1])
     size -= (size + 1) % 2
     coordinates = torch.arange(size, dtype=a.dtype, device=a.device) - size // 2
@@ -79,7 +79,7 @@ def ssim(
             value = F.pad(value, (pad, pad, pad, pad), mode="reflect")
         return F.conv2d(value, kernel, groups=3)
 
-    mean_a, mean_b = (blur(a), blur(b))
+    mean_a, mean_b = blur(a), blur(b)
     variance_a = (blur(a.square()) - mean_a.square()).clamp_min(0)
     variance_b = (blur(b.square()) - mean_b.square()).clamp_min(0)
     covariance = blur(a * b) - mean_a * mean_b
@@ -87,7 +87,7 @@ def ssim(
     denominator = (mean_a.square() + mean_b.square() + 0.01**2) * (variance_a + variance_b + 0.03**2)
     if mask is not None:
         validity = _mask(mask, a)
-        invalid = (validity < 1 - 1e-06).to(a.dtype)
+        invalid = (validity < 1 - 1e-6).to(a.dtype)
         pad = size // 2
         if pad:
             invalid = F.pad(invalid, (pad, pad, pad, pad), mode="reflect")
@@ -105,8 +105,8 @@ def srgb_to_lab(image: torch.Tensor) -> torch.Tensor:
     matrix = linear.new_tensor(
         [
             [0.4124564, 0.3575761, 0.1804375],
-            [0.2126729, 0.7151522, 0.072175],
-            [0.0193339, 0.119192, 0.9503041],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041],
         ]
     )
     xyz = torch.einsum("ij,bjhw->bihw", matrix, linear)
@@ -162,6 +162,65 @@ def clipping_metrics(
     return result
 
 
+def locality_metrics(
+    clean_graded: torch.Tensor,
+    corrupt_graded: torch.Tensor,
+    corrupted_input: torch.Tensor,
+    clean_target: torch.Tensor,
+    mask: torch.Tensor,
+    boundary_radius: int = 5,
+    valid_mask: torch.Tensor | None = None,
+) -> dict[str, torch.Tensor]:
+    """Recovery vs clean reference; locality compares two SAME-STYLE model outputs.
+
+    A positive recovery_mae_gain means improvement over the corrupted input.
+    Boundary drift is a proxy for artifact inspection, not a validated halo score.
+    """
+    _validate_pair(clean_graded, corrupt_graded)
+    _validate_pair(corrupted_input, clean_target)
+    valid = _mask(valid_mask, clean_graded)
+    weights = _mask(mask, clean_graded) * valid
+    if boundary_radius < 0:
+        raise ValueError("boundary_radius must be non-negative")
+    support = (weights > 0.01).float()
+    radius = boundary_radius
+    if radius:
+        size = 2 * radius + 1
+        dilated = F.max_pool2d(support, size, stride=1, padding=radius)
+        eroded = -F.max_pool2d(-support, size, stride=1, padding=radius)
+    else:
+        dilated = eroded = support
+    initial = masked_mean((corrupted_input - clean_target).abs(), weights)
+    corrected = masked_mean((corrupt_graded - clean_target).abs(), weights)
+    clean_error = masked_mean((clean_graded - clean_target).abs(), weights)
+    drift = (clean_graded - corrupt_graded).abs()
+    return {
+        "region_input_mae": initial,
+        "region_output_mae": corrected,
+        "clean_region_output_mae": clean_error,
+        "corruption_penalty_mae": corrected - clean_error,
+        "recovery_mae_gain": initial - corrected,
+        "counterfactual_region_drift_mae": masked_mean(drift, weights),
+        "outside_drift_mae": masked_mean(drift, (1 - dilated) * valid),
+        "boundary_drift_mae": masked_mean(drift, (dilated - eroded).clamp(0, 1) * valid),
+    }
+
+
+def noop_metrics(
+    output: torch.Tensor,
+    input_image: torch.Tensor,
+    mask: torch.Tensor | None = None,
+    threshold: float = 2 / 255,
+) -> dict[str, torch.Tensor]:
+    """Use on explicitly accepted/no-op examples, not arbitrary unedited photographs."""
+    _validate_pair(output, input_image)
+    difference = (output - input_image).abs()
+    return {
+        "noop_mae": masked_mean(difference, mask),
+        "noop_changed_fraction": masked_mean((difference.amax(1, keepdim=True) > threshold).float(), mask),
+    }
+
+
 def scene_bootstrap(
     values: Sequence[float],
     scene_ids: Sequence[str],
@@ -170,7 +229,7 @@ def scene_bootstrap(
     confidence: float = 0.95,
 ) -> dict:
     """Equal-weight scene means, resampled by scene (never pixels or repeated votes)."""
-    if len(values) != len(scene_ids) or samples < 1 or (not 0 < confidence < 1):
+    if len(values) != len(scene_ids) or samples < 1 or not 0 < confidence < 1:
         raise ValueError("Invalid values, scene IDs, samples or confidence")
     grouped = {}
     for value, scene in zip(values, scene_ids, strict=False):

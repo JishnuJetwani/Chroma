@@ -1,4 +1,4 @@
-"""Supervised global grading with recorded evaluation protocols."""
+"""Local-first training with explicit stages and recorded evaluation protocols."""
 
 from __future__ import annotations
 
@@ -35,8 +35,10 @@ DEFAULTS = {
     "patience": 8,
     "max_steps": None,
     "num_workers": 0,
+    "preservation": True,
     "clip_grad_norm": 1.0,
     "log_every": 25,
+    "combined_faults_after_micro_step": None,
     "validation": True,
     "cpu_threads": None,
     "pin_memory": None,
@@ -45,7 +47,16 @@ DEFAULTS = {
     "non_blocking": True,
     "max_seconds": None,
 }
-LOSS_DEFAULTS = {"reconstruction": 1.0, "lut_smooth": 0.001, "lut_monotonic": 0.01, "gamut": 0.01}
+LOSS_DEFAULTS = {
+    "reconstruction": 1.0,
+    "lut_smooth": 0.001,
+    "lut_monotonic": 0.01,
+    "map_smooth": 0.001,
+    "preservation": 0.2,
+    "identity": 0.1,
+    "gamut": 0.01,
+    "exposure_aux": 0.0,
+}
 
 
 def masked_mean(value, mask):
@@ -58,33 +69,101 @@ def reconstruction(prediction, target, mask):
 
 
 def recipe_penalties(recipe):
-    lut = recipe.luts
-    if lut is None:
-        return {"lut_smooth": torch.tensor(0.0), "lut_monotonic": torch.tensor(0.0)}
-    differences = [lut.diff(dim=axis) for axis in (2, 3, 4)]
-    return {
-        "lut_smooth": sum(d.square().mean() for d in differences) / 3,
-        "lut_monotonic": sum(F.relu(-d).square().mean() for d in differences) / 3,
-    }
+    """Normalize all penalties by their number of supported samples."""
+    tensors = [getattr(recipe, name, None) for name in ("luts", "exposure", "log_contrast")]
+    ref = next((value for value in tensors if isinstance(value, torch.Tensor)), None)
+    zero = ref.new_zeros(()) if ref is not None else torch.tensor(0.0)
+    result = {key: zero for key in ("lut_smooth", "lut_monotonic", "map_smooth")}
+    lut = getattr(recipe, "luts", None)
+    if lut is not None:
+        differences = [lut.diff(dim=axis) for axis in (2, 3, 4)]
+        result["lut_smooth"] = sum(d.square().mean() for d in differences) / 3
+        result["lut_monotonic"] = sum(F.relu(-d).square().mean() for d in differences) / 3
+    maps = [getattr(recipe, name, None) for name in ("exposure", "log_contrast")]
+    maps = [m for m in maps if m is not None]
+    if maps:
+        differences = [m.diff(dim=axis).abs().mean() for m in maps for axis in (-1, -2) if m.shape[axis] > 1]
+        result["map_smooth"] = sum(differences) / max(1, len(differences))
+    return result
 
 
-def _analyze(model, image, style):
-    return model.analyze(image, style)
+def _analyze(model, image, style, bypass=False, valid_mask=None):
+    return model.analyze(image, style, bypass_global=bypass)
+
+
+def exposure_auxiliary_loss(recipe, local_input, valid_mask, corruption):
+    """Supervise only known exposure inverses using the actual rendered map.
+
+    The caller restricts this to the repair stage. Pure exposure and identity
+    rows have exact inverse stops; contrast and combined faults deliberately do
+    not. Missing-map architectures and batches with no known inverse return
+    zero. No inverse label is inferred from a human-edited target.
+    """
+    from .renderer import exposure_field
+
+    zero = local_input.new_zeros(())
+    if corruption is None or recipe.exposure is None:
+        return zero
+    known = corruption["inverse_known"].to(device=local_input.device, dtype=local_input.dtype)
+    weights = valid_mask * known[:, None, None, None]
+    inverse = corruption["known_inverse"].to(device=local_input.device, dtype=local_input.dtype)
+    predicted = exposure_field(local_input, recipe)
+    return masked_mean((predicted - inverse).abs(), weights)
 
 
 def _loss(model, batch, settings, weights, micro_step):
-    from .renderer import render_with_aux
+    from .corruptions import corrupt_batch
+    from .renderer import render, render_with_aux
 
     image, target, mask, style = (batch[k] for k in ("image", "target", "valid_mask", "style_id"))
-    recipe = model.analyze(image, style)
-    prediction, aux = render_with_aux(image, recipe)
-    penalties = recipe_penalties(recipe)
-    terms = {
-        "reconstruction": reconstruction(prediction, target, mask),
-        "gamut": aux["gamut_penalty"],
-        **penalties,
-    }
-    return (sum((weights.get(name, 0) * value for name, value in terms.items())), terms)
+    stage = settings["stage"]
+    seed = settings["seed"] * 1000003 + micro_step
+    bypass = stage == "repair"
+    identity = False
+    support = None
+    reference = None
+    corrupted = None
+    threshold = settings.get("combined_faults_after_micro_step")
+    allow_combinations = threshold is not None and micro_step >= threshold
+    if stage == "repair":
+        clean = target
+        corrupted = corrupt_batch(
+            clean, seed=seed, allow_identity=True, valid_mask=mask, allow_combinations=allow_combinations
+        )
+        image, support = (corrupted["image"], corrupted["mask"])
+        reference = clean
+    elif stage == "joint" and micro_step % 4 == 3:
+        if micro_step % 16 == 15:
+            image = target
+            bypass, identity = (True, True)
+        else:
+            with torch.no_grad():
+                clean_recipe = _analyze(model, image, style, valid_mask=mask)
+                reference = render(image, clean_recipe).detach()
+            corrupted = corrupt_batch(
+                image, seed=seed, allow_identity=False, valid_mask=mask, allow_combinations=allow_combinations
+            )
+            image, support = (corrupted["image"], corrupted["mask"])
+    recipe = _analyze(model, image, style, bypass, valid_mask=mask)
+    output, auxiliary = render_with_aux(image, recipe, grade_strength=0.0 if bypass else 1.0)
+    terms = {"reconstruction": reconstruction(output, target, mask)}
+    terms.update(recipe_penalties(recipe))
+    if not bypass and hasattr(model, "regularization"):
+        regularization = model.regularization()
+        terms["lut_smooth"] = regularization.get("lut_smoothness", output.new_zeros(()))
+        terms["lut_monotonic"] = regularization.get("lut_monotonicity", output.new_zeros(()))
+    pre_gamut = auxiliary.get("pre_gamut", output)
+    terms["gamut"] = masked_mean(F.relu(-pre_gamut).square() + F.relu(pre_gamut - 1).square(), mask)
+    terms["identity"] = reconstruction(output, image, mask) if identity else output.new_zeros(())
+    terms["preservation"] = output.new_zeros(())
+    terms["exposure_aux"] = output.new_zeros(())
+    if stage == "repair" and weights.get("exposure_aux", 0) > 0:
+        terms["exposure_aux"] = exposure_auxiliary_loss(recipe, image, mask, corrupted)
+    if settings["preservation"] and support is not None and (reference is not None):
+        outside = 1 - F.max_pool2d(support.float(), kernel_size=9, stride=1, padding=4)
+        terms["preservation"] = reconstruction(output, reference, outside * mask)
+    total = sum((weights.get(name, 0) * value for name, value in terms.items()))
+    return (total, {key: value.detach() for key, value in terms.items()})
 
 
 def _move_batch(batch, device, non_blocking=True):
@@ -124,18 +203,35 @@ def _loader(dataset, settings, device, *, shuffle, generator):
     return DataLoader(dataset, **options)
 
 
-@torch.inference_mode()
+@torch.no_grad()
 def validation_loss(model, loader, device, stage, seed, non_blocking=True):
+    from .corruptions import corrupt_batch
+    from .renderer import render
+
     model.eval()
-    total, count = (0.0, 0)
-    for batch in loader:
-        batch = _move_batch(batch, device)
-        prediction = model(batch["image"], batch["style_id"])
-        value = reconstruction(prediction, batch["target"], batch["valid_mask"])
-        total += float(value) * len(batch["image"])
-        count += len(batch["image"])
+    total, count = (torch.zeros((), device=device), 0)
+    for index, batch in enumerate(loader):
+        batch = _move_batch(batch, device, non_blocking)
+        if stage == "repair":
+            source = corrupt_batch(
+                batch["target"],
+                seed=seed + index,
+                allow_identity=True,
+                valid_mask=batch["valid_mask"],
+                allow_combinations=False,
+            )["image"]
+            recipe = _analyze(model, source, batch["style_id"], True, batch["valid_mask"])
+            output = render(source, recipe, grade_strength=0)
+        else:
+            recipe = _analyze(model, batch["image"], batch["style_id"], valid_mask=batch["valid_mask"])
+            output = render(batch["image"], recipe)
+        n = batch["image"].shape[0]
+        total.add_(reconstruction(output, batch["target"], batch["valid_mask"]).detach() * n)
+        count += n
     model.train()
-    return total / max(1, count)
+    if not count:
+        raise ValueError("Validation split is empty. Supply scene-disjoint validation data.")
+    return float((total / count).cpu())
 
 
 def _resolve(config):
@@ -148,8 +244,8 @@ def _resolve(config):
     config.setdefault("model", {})
     config.setdefault("output_dir", "runs/experiment")
     settings = config["training"]
-    if settings["stage"] not in ("global",):
-        raise ValueError("stage must be global")
+    if settings["stage"] not in ("global", "repair", "joint"):
+        raise ValueError("stage must be global, repair, or joint")
     for name in ("epochs", "batch_size", "accumulation_steps"):
         if settings[name] < 1:
             raise ValueError(f"{name} must be positive")
@@ -177,6 +273,12 @@ def _resolve(config):
         type(settings["max_steps"]) is not int or settings["max_steps"] < 1
     ):
         raise ValueError("max_steps must be a positive integer or null")
+    threshold = settings["combined_faults_after_micro_step"]
+    if threshold is not None and (type(threshold) is not int or threshold < 0):
+        raise ValueError("combined_faults_after_micro_step must be a nonnegative integer or null")
+    aux_weight = config["loss"]["exposure_aux"]
+    if not isinstance(aux_weight, (int, float)) or not math.isfinite(aux_weight) or aux_weight < 0:
+        raise ValueError("exposure_aux must be a finite nonnegative weight")
     return config
 
 
@@ -196,6 +298,7 @@ def train(
     checkpoint. The budget is per invocation and checked at optimizer boundaries.
     ``checkpoint_callback(output_directory, record)`` runs after durable writes.
     """
+    from .corruptions import CORRUPTION_VERSION
     from .data import PairedDataset, read_manifest, validate_manifest
     from .models import ModelConfig, build_model, initialize_from_model
 
@@ -281,10 +384,17 @@ def train(
             "learning_rate",
             "weight_decay",
             "seed",
+            "preservation",
+            "combined_faults_after_micro_step",
             "validation",
         ):
             if previous["training"][key] != settings[key]:
                 raise ValueError(f"Cannot change {key} on resume; use --initialize for a new experiment.")
+        if (
+            settings["stage"] != "global"
+            and payload.get("metadata", {}).get("corruption_version") != CORRUPTION_VERSION
+        ):
+            raise ValueError("Corruption generator changed; start a new experiment instead of resuming.")
         if previous["data"] != config["data"] or previous["loss"] != config["loss"]:
             raise ValueError("Cannot change data or loss settings on resume; use --initialize instead.")
         model = restored
@@ -337,6 +447,15 @@ def train(
         "renderer_dtype": "float32",
         "environment": environment_info(device),
         "parameter_count": sum(p.numel() for p in model.parameters()),
+        "corruption_version": CORRUPTION_VERSION,
+        "repair_validation_protocol": {
+            "allow_combinations": False,
+            "allow_identity": True,
+            "families": ["ellipse", "gradient", "irregular"],
+            "seed_rule": "training seed + 900000 + validation batch index",
+        }
+        if settings["validation"]
+        else None,
         "source_sha256": {path.name: file_sha256(path) for path in Path(__file__).parent.glob("*.py")},
         "pilot": len(training_data) < 1000 or bool(config["data"]["limit"]) or settings["epochs"] <= 10,
     }

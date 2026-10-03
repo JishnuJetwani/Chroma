@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "selective-photograder"
 version = "0.1.0"
-description = "Local photo grading with learned color lookup tables"
+description = "Local photo grading with learned color LUTs and selective tonal correction"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

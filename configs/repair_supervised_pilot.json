@@ -1,0 +1,48 @@
+{
+  "model": {
+    "architecture": "local",
+    "styles": [
+      "FiveK Expert C"
+    ],
+    "preview_size": 256,
+    "lut_size": 33,
+    "num_luts": 8,
+    "map_size": 64,
+    "upsampling": "guided",
+    "order": "global_first"
+  },
+  "training": {
+    "stage": "repair",
+    "epochs": 5,
+    "batch_size": 2,
+    "accumulation_steps": 4,
+    "learning_rate": 0.0002,
+    "weight_decay": 0.0001,
+    "seed": 42,
+    "device": "mps",
+    "patience": 8,
+    "max_steps": 200,
+    "num_workers": 0,
+    "preservation": true,
+    "clip_grad_norm": 1.0,
+    "log_every": 25,
+    "combined_faults_after_micro_step": 128
+  },
+  "data": {
+    "manifest": "data/fivek/manifest.preview.jsonl",
+    "image_size": 256,
+    "limit": 128,
+    "val_limit": 32
+  },
+  "output_dir": "runs/repair_supervised_pilot",
+  "loss": {
+    "reconstruction": 1.0,
+    "lut_smooth": 0.001,
+    "lut_monotonic": 0.01,
+    "map_smooth": 0.001,
+    "preservation": 0.2,
+    "identity": 0.1,
+    "gamut": 0.01,
+    "exposure_aux": 0.05
+  }
+}

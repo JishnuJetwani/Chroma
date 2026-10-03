@@ -5,8 +5,11 @@ import torch
 
 from photograder.evaluation import evaluate
 from photograder.metrics import (
+    clipping_metrics,
     delta_e76,
+    locality_metrics,
     masked_mean,
+    noop_metrics,
     per_image_metrics,
     psnr,
     scene_bootstrap,
@@ -18,11 +21,11 @@ from photograder.metrics import (
 def test_known_psnr_and_mask_exclusion():
     target = torch.zeros(1, 3, 12, 12)
     output = target + 0.1
-    assert psnr(output, target).item() == pytest.approx(20, abs=0.0001)
+    assert psnr(output, target).item() == pytest.approx(20, abs=1e-4)
     output[:, :, :6] = 0.5
     mask = torch.zeros(1, 1, 12, 12)
     mask[:, :, 6:] = 1
-    assert psnr(output, target, mask).item() == pytest.approx(20, abs=0.0001)
+    assert psnr(output, target, mask).item() == pytest.approx(20, abs=1e-4)
     assert torch.isnan(psnr(output, target, torch.zeros_like(mask))).all()
 
 
@@ -31,7 +34,7 @@ def test_perfect_match_metrics_and_ssim_small_image():
     values = per_image_metrics(image, image)
     assert torch.equal(values["mae"], torch.zeros(2))
     assert torch.equal(values["delta_e76"], torch.zeros(2))
-    assert torch.allclose(values["ssim"], torch.ones(2), atol=1e-06)
+    assert torch.allclose(values["ssim"], torch.ones(2), atol=1e-6)
     assert torch.allclose(values["psnr"], torch.full((2,), 120.0))
     tiny = torch.rand(1, 3, 1, 1)
     assert ssim(tiny, tiny).item() == pytest.approx(1)
@@ -42,12 +45,13 @@ def test_ssim_is_invariant_to_changes_inside_privacy_and_padding_masks():
     target = torch.rand(1, 3, 64, 80)
     output = (target + 0.03).clamp(0, 1)
     valid = torch.ones(1, 1, 64, 80)
-    valid[..., :8, :] = 0
+    valid[..., :8, :] = 0  # letterbox padding
     valid[..., -8:, :] = 0
-    valid[..., 24:40, 32:48] = 0
+    valid[..., 24:40, 32:48] = 0  # privacy region
     expected = ssim(output, target, valid)
     changed = torch.where(valid.bool(), output, torch.zeros_like(output))
     torch.testing.assert_close(ssim(changed, target, valid), expected, atol=0, rtol=0)
+    # This is a real exclusion check: the unmasked score must see the damage.
     assert ssim(changed, target).item() < ssim(output, target).item()
 
 
@@ -56,6 +60,7 @@ def test_ssim_omits_examples_with_no_fully_valid_window():
     valid = torch.zeros(1, 1, 20, 20)
     valid[..., 8:12, 8:12] = 1
     assert torch.isnan(ssim(image, image, valid)).all()
+    # Full masks preserve normal reflect-padding behavior at real image edges.
     torch.testing.assert_close(ssim(image, image, torch.ones_like(valid)), ssim(image, image))
 
 
@@ -63,9 +68,43 @@ def test_lab_white_black_and_delta_e_units():
     white = torch.ones(1, 3, 4, 4)
     black = torch.zeros_like(white)
     lab = srgb_to_lab(white)
-    assert lab[0, 0, 0, 0].item() == pytest.approx(100, abs=0.001)
-    assert lab[0, 1:, 0, 0].abs().max().item() < 0.001
-    assert delta_e76(white, black).item() == pytest.approx(100, abs=0.001)
+    assert lab[0, 0, 0, 0].item() == pytest.approx(100, abs=1e-3)
+    assert lab[0, 1:, 0, 0].abs().max().item() < 1e-3
+    assert delta_e76(white, black).item() == pytest.approx(100, abs=1e-3)
+
+
+def test_local_recovery_uses_clean_model_output_for_outside_drift():
+    clean = torch.full((1, 3, 24, 24), 0.4)
+    mask = torch.zeros(1, 1, 24, 24)
+    mask[:, :, 8:16, 8:16] = 1
+    corrupted = clean + 0.2 * mask
+    # The global grade legitimately shifts the whole photo, which should not be
+    # counted as leakage outside the synthetic region.
+    clean_graded = clean + 0.1
+    corrected = clean_graded.clone()
+    result = locality_metrics(clean_graded, corrected, corrupted + 0.1, clean_graded, mask, boundary_radius=2)
+    assert result["outside_drift_mae"].item() == 0
+    assert result["boundary_drift_mae"].item() == 0
+    assert result["recovery_mae_gain"].item() == pytest.approx(0.2)
+    wrong = corrected.clone()
+    wrong[:, :, :2] += 0.1
+    assert locality_metrics(clean_graded, wrong, corrupted, clean, mask, 2)["outside_drift_mae"].item() > 0
+    valid = torch.ones_like(mask)
+    valid[:, :, :2] = 0
+    assert (
+        locality_metrics(clean_graded, wrong, corrupted, clean, mask, 2, valid)["outside_drift_mae"].item()
+        == 0
+    )
+
+
+def test_noop_and_new_clipping_are_explicit_diagnostics():
+    reference = torch.full((1, 3, 4, 4), 0.5)
+    assert noop_metrics(reference, reference)["noop_changed_fraction"].item() == 0
+    output = reference.clone()
+    output[:, 0, 0, 0] = 1
+    result = clipping_metrics(output, reference)
+    assert result["new_clipped_high_fraction"].item() == pytest.approx(1 / 16)
+    assert result["all_channels_white_fraction"].item() == 0
 
 
 def test_scene_bootstrap_does_not_count_duplicate_scene_as_independent():
@@ -88,7 +127,6 @@ def test_invalid_inputs_are_rejected():
 
 
 def test_evaluation_emits_portable_records_and_restores_training_mode(tmp_path):
-
     class Identity(torch.nn.Module):
         def forward(self, image, style):
             return image

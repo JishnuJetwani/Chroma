@@ -8,26 +8,34 @@ import torch
 from torch import Tensor, nn
 from torch.nn import functional as F
 
+from .color import luminance
 from .recipes import EditRecipe
-from .renderer import identity_lut, render
+from .renderer import apply_lut, identity_lut, render
 
 
 @dataclass
 class ModelConfig:
-    architecture: str = "global"
+    architecture: str = "local"
     styles: tuple[str, ...] = ("Expert C",)
     preview_size: int = 256
     lut_size: int = 33
     num_luts: int = 8
+    map_size: int = 64
+    upsampling: str = "guided"
+    order: str = "global_first"
 
     def __post_init__(self):
         self.styles = tuple(self.styles)
-        if self.architecture not in ("fixed", "global"):
+        if self.architecture not in ("fixed", "global", "local"):
             raise ValueError("Unknown architecture: " + self.architecture)
         if not self.styles or len(set(self.styles)) != len(self.styles):
             raise ValueError("styles must be a nonempty sequence of unique names")
-        if self.preview_size < 32 or self.lut_size < 2 or self.num_luts < 1:
-            raise ValueError("Invalid preview or LUT size")
+        if self.preview_size < 32 or self.map_size < 4 or self.lut_size < 2 or (self.num_luts < 1):
+            raise ValueError("Invalid preview, map, or LUT size")
+        if self.order not in ("global_first", "local_first"):
+            raise ValueError("order must be global_first or local_first")
+        if self.upsampling not in ("guided", "bilinear"):
+            raise ValueError("upsampling must be guided or bilinear")
 
 
 def _preview(image: Tensor, size: int):
@@ -36,7 +44,21 @@ def _preview(image: Tensor, size: int):
     new_h, new_w = (max(1, round(height * scale)), max(1, round(width * scale)))
     resized = F.interpolate(image, size=(new_h, new_w), mode="bilinear", align_corners=False)
     top, left = ((size - new_h) // 2, (size - new_w) // 2)
-    return F.pad(resized, (left, size - new_w - left, top, size - new_h - top), mode="replicate")
+    return (
+        F.pad(resized, (left, size - new_w - left, top, size - new_h - top), mode="replicate"),
+        (top, left, new_h, new_w),
+    )
+
+
+def _unpad(field: Tensor, crop, preview_size: int, map_size: int) -> Tensor:
+    top, left, height, width = crop
+    field = F.interpolate(field, size=(preview_size, preview_size), mode="bilinear", align_corners=False)
+    field = field[..., top : top + height, left : left + width]
+    output_size = (
+        max(1, round(map_size * height / max(height, width))),
+        max(1, round(map_size * width / max(height, width))),
+    )
+    return F.interpolate(field, size=output_size, mode="bilinear", align_corners=False)
 
 
 class ConvBlock(nn.Sequential):
@@ -59,9 +81,35 @@ class Encoder(nn.Module):
         )
 
     def forward(self, image):
+        features = []
         for block in self.blocks:
             image = block(image)
-        return image
+            features.append(image)
+        return features
+
+
+class SpatialDecoder(nn.Module):
+    def __init__(self, outputs):
+        super().__init__()
+        self.up1 = ConvBlock(256, 64)
+        self.up2 = ConvBlock(128, 32)
+        self.fuse = ConvBlock(32 + 32 + 16 + 1, 32)
+        self.output = nn.Conv2d(32, outputs, 1)
+        nn.init.zeros_(self.output.weight)
+        nn.init.zeros_(self.output.bias)
+
+    def forward(self, features, style, guide):
+        f0, f1, f2, f3 = features
+        x = self.up1(
+            torch.cat((F.interpolate(f3, size=f2.shape[-2:], mode="bilinear", align_corners=False), f2), 1)
+        )
+        x = self.up2(
+            torch.cat((F.interpolate(x, size=f1.shape[-2:], mode="bilinear", align_corners=False), f1), 1)
+        )
+        early = F.adaptive_avg_pool2d(f0, x.shape[-2:])
+        guide = F.interpolate(guide, size=x.shape[-2:], mode="bilinear", align_corners=False)
+        style = style[:, :, None, None].expand(-1, -1, *x.shape[-2:])
+        return self.output(self.fuse(torch.cat((x, early, style, guide), dim=1)))
 
 
 class LUTBank(nn.Module):
@@ -88,8 +136,8 @@ class LUTBank(nn.Module):
 
 
 class RecipeModel(nn.Module):
-    def forward(self, image: Tensor, style: Tensor | None = None) -> Tensor:
-        return render(image, self.analyze(image, style))
+    def forward(self, image: Tensor, style: Tensor | None = None, valid_mask: Tensor | None = None) -> Tensor:
+        return render(image, self.analyze(image, style, valid_mask=valid_mask))
 
     def _style(self, image, style):
         if style is None:
@@ -108,7 +156,12 @@ class RecipeModel(nn.Module):
         return style
 
     def _metadata(self):
-        return {"version": 1, "architecture": self.config.architecture}
+        return {
+            "version": 1,
+            "architecture": self.config.architecture,
+            "upsampling": self.config.upsampling,
+            "order": self.config.order,
+        }
 
 
 class FixedLUTModel(RecipeModel):
@@ -119,10 +172,12 @@ class FixedLUTModel(RecipeModel):
         with torch.no_grad():
             self.bank.tables.copy_(identity_lut(config.lut_size)[None])
 
-    def analyze(self, image, style=None):
+    def analyze(self, image, style=None, bypass_global=False, valid_mask=None):
         style = self._style(image, style)
         return EditRecipe(
-            luts=self.bank.tables[style], source_size=tuple(image.shape[-2:]), metadata=self._metadata()
+            luts=None if bypass_global else self.bank.tables[style],
+            source_size=tuple(image.shape[-2:]),
+            metadata=self._metadata(),
         )
 
     def regularization(self):
@@ -130,7 +185,7 @@ class FixedLUTModel(RecipeModel):
 
 
 class GradingModel(RecipeModel):
-    """Predict image-dependent mixing weights over learned global color tables."""
+    """Shared feature extractor; global and spatial branches have distinct jobs."""
 
     def __init__(self, config):
         super().__init__()
@@ -138,23 +193,48 @@ class GradingModel(RecipeModel):
         self.encoder = Encoder()
         self.style_embedding = nn.Embedding(len(config.styles), 16)
         nn.init.normal_(self.style_embedding.weight, std=0.02)
-        self.bank = LUTBank(config.num_luts, config.lut_size)
-        self.mixer = nn.Linear(128 + 16, config.num_luts)
-        nn.init.zeros_(self.mixer.weight)
-        nn.init.zeros_(self.mixer.bias)
+        self.has_global = config.architecture in ("global", "local")
+        self.has_local = config.architecture == "local"
+        if self.has_global:
+            self.bank = LUTBank(config.num_luts, config.lut_size)
+            self.mixer = nn.Linear(128 + 16, config.num_luts)
+            nn.init.zeros_(self.mixer.weight)
+            nn.init.zeros_(self.mixer.bias)
+        if self.has_local:
+            self.decoder = SpatialDecoder(2)
 
-    def analyze(self, image, style=None):
+    def analyze(self, image, style=None, bypass_global=False, valid_mask=None):
+        with torch.autocast(device_type=image.device.type, enabled=False):
+            return self._analyze_fp32(image.float(), style, bypass_global, valid_mask)
+
+    def _analyze_fp32(self, image, style=None, bypass_global=False, valid_mask=None):
         style = self._style(image, style)
-        preview = _preview(image, self.config.preview_size)
+        preview, crop = _preview(image, self.config.preview_size)
         features = self.encoder(preview)
-        pooled = features.float().mean((-2, -1))
-        weights = self.mixer(torch.cat((pooled, self.style_embedding(style)), 1)).softmax(-1)
-        return EditRecipe(
-            luts=self.bank(weights), source_size=tuple(image.shape[-2:]), metadata=self._metadata()
-        )
+        embedding = self.style_embedding(style)
+        recipe = EditRecipe(source_size=tuple(image.shape[-2:]), metadata=self._metadata())
+        guide_image = preview
+        if self.has_global and (not bypass_global):
+            pooled = features[-1].float().mean((-2, -1))
+            conditioning = [pooled, embedding]
+            weights = self.mixer(torch.cat(conditioning, 1)).softmax(-1)
+            recipe.luts = self.bank(weights)
+            if self.config.order == "global_first":
+                guide_image = apply_lut(preview, recipe.luts)
+        guide = luminance(guide_image)
+        recipe.guide = _unpad(guide, crop, self.config.preview_size, self.config.map_size)
+        if self.has_local:
+            output = self.decoder(features, embedding, guide)
+            output = _unpad(output.float(), crop, self.config.preview_size, self.config.map_size)
+            recipe.exposure = torch.tanh(output[:, :1])
+            recipe.log_contrast = torch.tanh(output[:, 1:2])
+        return recipe
 
     def regularization(self):
-        return self.bank.regularization()
+        if self.has_global:
+            return self.bank.regularization()
+        zero = next(self.parameters()).new_zeros(())
+        return {"lut_smoothness": zero, "lut_monotonicity": zero}
 
 
 def build_model(config=None):
