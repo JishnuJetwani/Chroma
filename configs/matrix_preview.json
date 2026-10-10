@@ -1,0 +1,34 @@
+{
+  "description": "Exact hyperparameter replay of the measured 128train/32val/32test preview curriculum; same immutable preview manifest, 256 analysis and render size, seed42, patience8, global10/repair5/joint10 epochs. Fresh output paths preserve the original pilot runs. Hardware nondeterminism may change numeric results. Dry-run by default.",
+  "experiments": [
+    {
+      "id": "fixed_preview",
+      "config": "preview/fixed.json",
+      "enabled": true
+    },
+    {
+      "id": "global_preview",
+      "config": "preview/global.json",
+      "enabled": true
+    },
+    {
+      "id": "repair_preview",
+      "config": "preview/repair.json",
+      "enabled": true,
+      "initialize": "../runs/preview_reproduction/global/best.pt"
+    },
+    {
+      "id": "local_preview",
+      "config": "preview/local.json",
+      "enabled": true,
+      "initialize": "../runs/preview_reproduction/repair/best.pt"
+    },
+    {
+      "id": "local_no_preservation_preview",
+      "config": "preview/local_no_preservation.json",
+      "enabled": true,
+      "initialize": "../runs/preview_reproduction/repair/best.pt"
+    }
+  ],
+  "working_directory": ".."
+}

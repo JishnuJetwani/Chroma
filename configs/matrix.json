@@ -1,0 +1,59 @@
+{
+  "description": "Planned 512-render curriculum: fixed/global from scratch; repair initialized from global; joint local and no-outside-preservation variants initialized from the same repair checkpoint. Dry-run by default. Other architecture ablations remain disabled and have no forced initialization. For the exact measured 256-render pilot protocol use matrix_preview.json.",
+  "experiments": [
+    {
+      "id": "fixed_pilot",
+      "config": "fixed_pilot.json",
+      "enabled": true
+    },
+    {
+      "id": "global_pilot",
+      "config": "global_pilot.json",
+      "enabled": true
+    },
+    {
+      "id": "repair_pilot",
+      "config": "repair_pilot.json",
+      "enabled": true,
+      "initialize": "../runs/global_pilot/best.pt"
+    },
+    {
+      "id": "local_pilot",
+      "config": "local_pilot.json",
+      "enabled": true,
+      "initialize": "../runs/repair_pilot/best.pt"
+    },
+    {
+      "id": "local_no_preservation_pilot",
+      "config": "local_no_preservation_pilot.json",
+      "enabled": true,
+      "initialize": "../runs/repair_pilot/best.pt"
+    },
+    {
+      "id": "local_bilinear_pilot",
+      "config": "local_bilinear_pilot.json",
+      "enabled": false
+    },
+    {
+      "id": "local_specialists_pilot",
+      "config": "local_specialists_pilot.json",
+      "enabled": false
+    },
+    {
+      "id": "cascade_pilot",
+      "config": "cascade_pilot.json",
+      "enabled": false
+    },
+    {
+      "id": "unet_pilot",
+      "config": "unet_pilot.json",
+      "enabled": false
+    },
+    {
+      "id": "bilateral_pilot",
+      "config": "bilateral_pilot.json",
+      "enabled": false
+    }
+  ],
+  "working_directory": ".."
+}

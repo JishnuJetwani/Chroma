@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import torch
 from torch import Tensor, nn
@@ -10,7 +10,7 @@ from torch.nn import functional as F
 
 from .color import luminance
 from .recipes import EditRecipe
-from .renderer import apply_lut, identity_lut, render
+from .renderer import apply_lut, identity_lut, render, render_with_aux
 
 
 @dataclass
@@ -23,10 +23,14 @@ class ModelConfig:
     map_size: int = 64
     upsampling: str = "guided"
     order: str = "global_first"
+    tonal_specialists: bool = False
+    global_context: bool = False
+    basis_init: str = "legacy"
+    basis_init_strength: float = 0.02
 
     def __post_init__(self):
         self.styles = tuple(self.styles)
-        if self.architecture not in ("fixed", "global", "local"):
+        if self.architecture not in ("fixed", "global", "local", "cascade", "unet", "bilateral"):
             raise ValueError("Unknown architecture: " + self.architecture)
         if not self.styles or len(set(self.styles)) != len(self.styles):
             raise ValueError("styles must be a nonempty sequence of unique names")
@@ -36,6 +40,8 @@ class ModelConfig:
             raise ValueError("order must be global_first or local_first")
         if self.upsampling not in ("guided", "bilinear"):
             raise ValueError("upsampling must be guided or bilinear")
+        if self.basis_init not in ("legacy", "diverse") or not 0 <= self.basis_init_strength <= 1:
+            raise ValueError("basis_init must be legacy or diverse, with strength between zero and one")
 
 
 def _preview(image: Tensor, size: int):
@@ -113,13 +119,36 @@ class SpatialDecoder(nn.Module):
 
 
 class LUTBank(nn.Module):
-    def __init__(self, count, size):
+    def __init__(self, count, size, initialization="legacy", strength=0.02):
         super().__init__()
         identity = identity_lut(size)
         values = torch.arange(count * 3, dtype=torch.float32).reshape(count, 3, 1, 1, 1)
         coefficients = torch.sin(values * 2.39996 + 0.3)
-        coefficients -= coefficients.mean(dim=0, keepdim=True)
-        variation = 0.02 * coefficients * identity[None] * (1 - identity[None])
+        coefficients = coefficients - coefficients.mean(dim=0, keepdim=True)
+        if initialization == "diverse":
+            r, g, b = identity * 2 - 1
+            features = torch.stack(
+                (
+                    torch.ones_like(r),
+                    r,
+                    g,
+                    b,
+                    r * g,
+                    r * b,
+                    g * b,
+                    r.square() - 1 / 3,
+                    g.square() - 1 / 3,
+                    b.square() - 1 / 3,
+                )
+            )
+            generator = torch.Generator().manual_seed(1701)
+            weights = torch.randn(count, 3, len(features), generator=generator)
+            perturbation = torch.einsum("ncf,fijk->ncijk", weights, features)
+            perturbation -= perturbation.mean(dim=0, keepdim=True)
+            perturbation /= perturbation.abs().max().clamp_min(1e-08)
+        else:
+            perturbation = coefficients
+        variation = strength * perturbation * identity[None] * (1 - identity[None])
         self.tables = nn.Parameter(identity[None].repeat(count, 1, 1, 1, 1) + variation)
 
     def forward(self, weights):
@@ -187,21 +216,54 @@ class FixedLUTModel(RecipeModel):
 class GradingModel(RecipeModel):
     """Shared feature extractor; global and spatial branches have distinct jobs."""
 
-    def __init__(self, config):
+    def __init__(self, config, specialist=None):
         super().__init__()
-        self.config = config
+        self.config, self.specialist = (config, specialist)
         self.encoder = Encoder()
         self.style_embedding = nn.Embedding(len(config.styles), 16)
         nn.init.normal_(self.style_embedding.weight, std=0.02)
-        self.has_global = config.architecture in ("global", "local")
-        self.has_local = config.architecture == "local"
+        self.has_global = config.architecture in ("global", "local") and specialist is None
+        self.has_local = config.architecture == "local" or specialist is not None
         if self.has_global:
-            self.bank = LUTBank(config.num_luts, config.lut_size)
-            self.mixer = nn.Linear(128 + 16, config.num_luts)
+            self.bank = LUTBank(
+                config.num_luts, config.lut_size, config.basis_init, config.basis_init_strength
+            )
+            self.mixer = nn.Linear(128 + 16 + (8 if config.global_context else 0), config.num_luts)
             nn.init.zeros_(self.mixer.weight)
             nn.init.zeros_(self.mixer.bias)
-        if self.has_local:
-            self.decoder = SpatialDecoder(2)
+        if self.has_local or config.architecture == "unet":
+            self.decoder = SpatialDecoder(
+                3 if config.architecture == "unet" or config.tonal_specialists else 2
+            )
+        if config.architecture == "bilateral":
+            self.grid_head = nn.Conv2d(128, 12 * 8, 1)
+            self.grid_style = nn.Linear(16, 12 * 8)
+            nn.init.zeros_(self.grid_head.weight)
+            nn.init.zeros_(self.grid_head.bias)
+            nn.init.zeros_(self.grid_style.weight)
+            nn.init.zeros_(self.grid_style.bias)
+            affine = torch.zeros(12, 8, 1, 1)
+            affine[[0, 5, 10]] = 1
+            self.register_buffer("identity_affine", affine)
+
+    def _context(self, preview, crop, valid_mask=None):
+        top, left, height, width = crop
+        content = preview[..., top : top + height, left : left + width]
+        if valid_mask is None:
+            weight = torch.ones_like(content[:, :1])
+        else:
+            weight = F.interpolate(
+                valid_mask.to(device=preview.device, dtype=preview.dtype),
+                size=(height, width),
+                mode="bilinear",
+                align_corners=False,
+            ).clamp(0, 1)
+        samples = torch.cat((content, luminance(content)), dim=1)
+        mass = weight.sum((-2, -1)).clamp_min(1)
+        mean = (samples * weight).sum((-2, -1)) / mass
+        variance = ((samples - mean[:, :, None, None]).square() * weight).sum((-2, -1)) / mass
+        std = variance.clamp_min(1e-08).sqrt()
+        return torch.cat((mean * 2 - 1, std * 4), dim=1)
 
     def analyze(self, image, style=None, bypass_global=False, valid_mask=None):
         with torch.autocast(device_type=image.device.type, enabled=False):
@@ -217,6 +279,8 @@ class GradingModel(RecipeModel):
         if self.has_global and (not bypass_global):
             pooled = features[-1].float().mean((-2, -1))
             conditioning = [pooled, embedding]
+            if self.config.global_context:
+                conditioning.append(self._context(preview, crop, valid_mask))
             weights = self.mixer(torch.cat(conditioning, 1)).softmax(-1)
             recipe.luts = self.bank(weights)
             if self.config.order == "global_first":
@@ -226,8 +290,37 @@ class GradingModel(RecipeModel):
         if self.has_local:
             output = self.decoder(features, embedding, guide)
             output = _unpad(output.float(), crop, self.config.preview_size, self.config.map_size)
-            recipe.exposure = torch.tanh(output[:, :1])
-            recipe.log_contrast = torch.tanh(output[:, 1:2])
+            if self.config.tonal_specialists:
+                bright = recipe.guide
+                highlight_gate = ((bright - 0.5) * 2).clamp(0, 1)
+                shadow_gate = ((0.5 - bright) * 2).clamp(0, 1)
+                darkening = -torch.tanh(output[:, :1]).clamp_min(0) * highlight_gate
+                lifting = torch.tanh(output[:, 1:2]).clamp_min(0) * shadow_gate
+                recipe.exposure = darkening + lifting
+                recipe.log_contrast = torch.tanh(output[:, 2:3])
+            else:
+                recipe.exposure = torch.tanh(output[:, :1])
+                recipe.log_contrast = torch.tanh(output[:, 1:2])
+            if self.specialist == "exposure":
+                recipe.log_contrast = None
+            elif self.specialist == "contrast":
+                recipe.exposure = None
+        elif self.config.architecture == "unet":
+            output = self.decoder(features, embedding, guide)
+            recipe.rgb_residual = 0.25 * torch.tanh(
+                _unpad(output.float(), crop, self.config.preview_size, self.config.map_size)
+            )
+            recipe.metadata["residual_is_local"] = True
+        elif self.config.architecture == "bilateral":
+            spatial = F.adaptive_avg_pool2d(features[-1], (16, 16))
+            spatial_grid = self.grid_head(spatial)
+            grid = spatial_grid.float() + self.grid_style(embedding)[:, :, None, None]
+            grid = grid.reshape(image.shape[0], 12, 8, 16, 16)
+            flat = _unpad(grid.flatten(1, 2), crop, self.config.preview_size, 16)
+            recipe.bilateral_grid = (
+                flat.reshape(image.shape[0], 12, 8, *flat.shape[-2:]) + self.identity_affine[None]
+            )
+            recipe.metadata["grid_is_local"] = True
         return recipe
 
     def regularization(self):
@@ -237,11 +330,51 @@ class GradingModel(RecipeModel):
         return {"lut_smoothness": zero, "lut_monotonicity": zero}
 
 
-def build_model(config=None):
+class CascadedModel(RecipeModel):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        local = replace(config, architecture="local", order="local_first", tonal_specialists=False)
+        self.exposure_model = GradingModel(local, specialist="exposure")
+        self.contrast_model = GradingModel(local, specialist="contrast")
+        self.global_model = GradingModel(replace(config, architecture="global"))
+
+    def analyze(self, image, style=None, bypass_global=False, valid_mask=None):
+        height, width = image.shape[-2:]
+        scale = self.config.preview_size / max(height, width)
+        preview = F.interpolate(
+            image,
+            size=(max(1, round(height * scale)), max(1, round(width * scale))),
+            mode="bilinear",
+            align_corners=False,
+        )
+        mask = (
+            None if valid_mask is None else F.interpolate(valid_mask, size=preview.shape[-2:], mode="nearest")
+        )
+        first = self.exposure_model.analyze(preview, style, bypass_global=True, valid_mask=mask)
+        second_input = render_with_aux(preview, first, _clip_output=False)[0]
+        second = self.contrast_model.analyze(second_input, style, bypass_global=True, valid_mask=mask)
+        stages = [first, second]
+        if not bypass_global:
+            third = self.global_model.analyze(
+                render_with_aux(second_input, second, _clip_output=False)[0], style, valid_mask=mask
+            )
+            stages.append(third)
+        return EditRecipe(stages=stages, source_size=tuple(image.shape[-2:]), metadata=self._metadata())
+
+    def regularization(self):
+        return self.global_model.regularization()
+
+
+def build_model(config: ModelConfig | None = None) -> RecipeModel:
     config = config or ModelConfig()
     if isinstance(config, dict):
         config = ModelConfig(**config)
-    return FixedLUTModel(config) if config.architecture == "fixed" else GradingModel(config)
+    if config.architecture == "fixed":
+        return FixedLUTModel(config)
+    if config.architecture == "cascade":
+        return CascadedModel(config)
+    return GradingModel(config)
 
 
 def initialize_from_model(target: RecipeModel, source: RecipeModel) -> dict:

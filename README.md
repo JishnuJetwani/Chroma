@@ -1,6 +1,6 @@
 # Selective Grade
 
-A shared CNN decoder predicts bounded exposure and contrast maps. Guided upsampling and overlapping rendering tiles preserve spatial continuity. Synthetic repair and outside-region consistency extend the global training curriculum.
+Controlled model alternatives, style-aware initialization, experiment matrices, paired confidence intervals, and blind preference studies. Research notes distinguish measurements from proposed experiments.
 
 Python 3.11; install with `uv sync --locked --extra dev --extra data`.
 Run `pytest -q` for the checks available at this stage.

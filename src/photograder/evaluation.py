@@ -29,6 +29,8 @@ def _scalar(value):
 
 
 def _forward(model, image, style, valid_mask):
+    if getattr(getattr(model, "config", None), "global_context", False):
+        return model(image, style, valid_mask=valid_mask)
     return model(image, style)
 
 
@@ -151,6 +153,7 @@ def evaluate(
                             ).items()
                         }
                     )
+                # Real no-op designation must come from the manifest/annotator.
                 if "is_noop" in batch:
                     noops = noop_metrics(prediction, image, valid_mask)
                     flags = torch.as_tensor(batch["is_noop"], device=device).bool()

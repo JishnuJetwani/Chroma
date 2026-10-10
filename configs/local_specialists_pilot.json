@@ -1,0 +1,37 @@
+{
+  "model": {
+    "styles": [
+      "FiveK Expert C"
+    ],
+    "preview_size": 256,
+    "lut_size": 33,
+    "num_luts": 8,
+    "map_size": 64,
+    "upsampling": "guided",
+    "order": "global_first",
+    "tonal_specialists": true,
+    "architecture": "local"
+  },
+  "training": {
+    "stage": "joint",
+    "epochs": 10,
+    "batch_size": 2,
+    "accumulation_steps": 4,
+    "learning_rate": 0.0002,
+    "weight_decay": 0.0001,
+    "seed": 42,
+    "device": "mps",
+    "patience": 3,
+    "max_steps": 200,
+    "num_workers": 0,
+    "preservation": true
+  },
+  "data": {
+    "manifest": "data/fivek/manifest.jsonl",
+    "image_size": 512,
+    "limit": 128,
+    "val_limit": 32
+  },
+  "output_dir": "runs/local_specialists_pilot",
+  "loss": {}
+}

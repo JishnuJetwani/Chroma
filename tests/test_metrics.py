@@ -1,9 +1,11 @@
+import csv
 import json
 
 import pytest
 import torch
 
 from photograder.evaluation import evaluate
+from photograder.experiments import analyze_votes, compare_evaluations, create_blind_comparisons, run_matrix
 from photograder.metrics import (
     clipping_metrics,
     delta_e76,
@@ -156,3 +158,175 @@ def test_evaluation_emits_portable_records_and_restores_training_mode(tmp_path):
     assert json.loads((tmp_path / "metrics.json").read_text())["checkpoint"] == "identity-test"
     assert len(list((tmp_path / "comparisons").glob("*.png"))) == 2
     assert (tmp_path / "metrics.csv").exists()
+
+
+def test_evaluation_controls_use_original_inputs_and_held_out_family(tmp_path, monkeypatch):
+    from photograder import corruptions
+
+    class Identity(torch.nn.Module):
+        def forward(self, image, style):
+            return image
+
+    source = torch.full((1, 3, 20, 20), 0.3)
+    target = source + 0.1
+    valid = torch.ones(1, 1, 20, 20)
+    valid[:, :, :2] = 0
+    captured = {}
+
+    def fake_corrupt(images, **kwargs):
+        captured.update(kwargs)
+        assert torch.equal(images, source)
+        mask = torch.zeros_like(valid)
+        mask[:, :, 8:12, 8:12] = 1
+        return {"image": images + mask * 0.1, "mask": mask}
+
+    monkeypatch.setattr(corruptions, "corrupt_batch", fake_corrupt)
+    report = evaluate(
+        Identity(),
+        [
+            {
+                "image": source,
+                "target": target,
+                "valid_mask": valid,
+                "scene_id": ["test"],
+                "style_id": torch.zeros(1, dtype=torch.long),
+            }
+        ],
+        "cpu",
+        tmp_path,
+        include_controls=True,
+        bootstrap_samples=10,
+    )
+    assert captured["families"] == ("edge_aware",)
+    assert captured["allow_combinations"]
+    assert torch.equal(captured["valid_mask"], valid)
+    assert report["metrics"]["control_outside_drift_mae"]["mean"] == 0
+    assert report["controls"]["source"] == "original paired input"
+
+
+def test_global_context_evaluation_receives_validity_mask(tmp_path):
+    from types import SimpleNamespace
+
+    image = torch.full((1, 3, 20, 20), 0.4)
+    valid = torch.ones(1, 1, 20, 20)
+    valid[:, :, :2] = 0
+
+    class ContextIdentity(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.config = SimpleNamespace(global_context=True)
+            self.calls = 0
+
+        def forward(self, source, style, valid_mask=None):
+            assert torch.equal(valid_mask, valid)
+            self.calls += 1
+            return source
+
+    model = ContextIdentity()
+    batch = {
+        "image": image,
+        "target": image,
+        "valid_mask": valid,
+        "scene_id": ["context-test"],
+        "style_id": torch.zeros(1, dtype=torch.long),
+    }
+    evaluate(model, [batch], "cpu", tmp_path, include_controls=True, bootstrap_samples=10)
+    assert model.calls == 2
+
+
+def test_blind_comparisons_and_vote_analysis(tmp_path):
+    from PIL import Image
+
+    paths = []
+    for index, value in enumerate((80, 90, 100)):
+        path = tmp_path / f"image{index}.png"
+        Image.new("RGB", (16, 16), (value, value, value)).save(path)
+        paths.append(str(path))
+    destination = tmp_path / "blind"
+    create_blind_comparisons(
+        [
+            {
+                "scene_id": "scene1",
+                "image_id": "photo1",
+                "input_path": paths[0],
+                "a_path": paths[1],
+                "b_path": paths[2],
+            }
+        ],
+        destination,
+    )
+    with (destination / "private_key.csv").open() as handle:
+        info = list(csv.DictReader(handle))[0]
+    choice = "A" if info["left_model"] == "candidate" else "B"
+    with (destination / "votes.csv").open("w", newline="") as handle:
+        writer = csv.DictWriter(
+            handle, fieldnames=["comparison_id", "rater_id", "overall", "local_correction", "fewer_artifacts"]
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "comparison_id": info["comparison_id"],
+                "rater_id": "person1",
+                "overall": choice,
+                "local_correction": "tie",
+                "fewer_artifacts": "",
+            }
+        )
+    result = analyze_votes(destination / "votes.csv", destination / "private_key.csv", bootstrap_samples=10)
+    assert result["outcomes"]["overall"]["mean"] == 1
+    assert result["outcomes"]["local_correction"]["ties"] == 1
+    assert result["outcomes"]["local_correction"]["mean"] is None
+
+
+def test_preview_matrix_has_correct_independent_joint_initializations():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    planned = run_matrix(root / "configs/matrix_preview.json")
+    assert [entry["id"] for entry in planned] == [
+        "fixed_preview",
+        "global_preview",
+        "repair_preview",
+        "local_preview",
+        "local_no_preservation_preview",
+    ]
+    assert "--initialize" not in planned[0]["command"]
+    assert "--initialize" not in planned[1]["command"]
+    assert planned[2]["command"][-1] == str(root / "runs/preview_reproduction/global/best.pt")
+    assert (
+        planned[3]["command"][-1]
+        == planned[4]["command"][-1]
+        == str(root / "runs/preview_reproduction/repair/best.pt")
+    )
+    assert all(entry["working_directory"] == str(root) for entry in planned)
+    assert all(not entry["executed"] for entry in planned)
+
+
+def test_matched_comparison_uses_paired_deltas_and_rejects_different_protocol(tmp_path):
+    reports = []
+    for name, scores in (("reference", [20, 30]), ("candidate", [21, 31])):
+        folder = tmp_path / name
+        folder.mkdir()
+        report = {
+            "images": 2,
+            "protocol": {"manifest_sha256": "same-data", "split": "test", "image_size": 256, "seed": 42},
+            "metrics": {"psnr": {}},
+            "metric_note": "fixed metric definition",
+            "torch_version": "2.8.0",
+            "device": "cpu",
+            "controls": None,
+            "model_config": {"styles": ["Expert C"]},
+        }
+        (folder / "metrics.json").write_text(json.dumps(report))
+        with (folder / "metrics.csv").open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["scene_id", "style_id", "image_index", "psnr"])
+            writer.writeheader()
+            for index, score in enumerate(scores):
+                writer.writerow({"scene_id": str(index), "style_id": 0, "image_index": index, "psnr": score})
+        reports.append(str(folder))
+    compared = compare_evaluations(reports, tmp_path / "comparison", bootstrap_samples=10)
+    assert compared["comparisons"][0]["paired_deltas"]["psnr"]["mean"] == 1
+    report["protocol"]["image_size"] = 512
+    (folder / "metrics.json").write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="image_size"):
+        compare_evaluations(reports, tmp_path / "mismatch", bootstrap_samples=10)

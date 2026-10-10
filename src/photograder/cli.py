@@ -35,6 +35,9 @@ def main(argv=None):
     evaluate.add_argument("--device", default="auto")
     evaluate.add_argument("--split", default="test", choices=["train", "val", "test"])
     evaluate.add_argument("--image-size", type=int, default=512)
+    matrix = sub.add_parser("experiments")
+    matrix.add_argument("matrix")
+    matrix.add_argument("--execute", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "doctor":
         from .runtime import environment_info, select_device
@@ -83,4 +86,8 @@ def main(argv=None):
             args.output,
             checkpoint=args.checkpoint,
         )
+    elif args.command == "experiments":
+        from .experiments import run_matrix
+
+        result = run_matrix(args.matrix, execute=args.execute)
     print(json.dumps(result, indent=2, default=str))

@@ -9,7 +9,8 @@
     "num_luts": 8,
     "map_size": 64,
     "upsampling": "guided",
-    "order": "global_first"
+    "order": "global_first",
+    "tonal_specialists": false
   },
   "training": {
     "stage": "repair",

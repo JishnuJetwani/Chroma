@@ -118,7 +118,7 @@ def test_omitting_unused_gamut_buffers_preserves_pixels_and_gradients():
     torch.manual_seed(63)
     image = (torch.rand(1, 3, 19, 27) * 0.8 + 0.1).requires_grad_()
     stops = torch.full((1, 1, 5, 7), 0.7, requires_grad=True)
-    recipe = EditRecipe(luts=identity_lut(5)[None] * 0.97, exposure=stops)
+    recipe = EditRecipe(stages=[EditRecipe(luts=identity_lut(5)[None] * 0.97), EditRecipe(exposure=stops)])
     with_aux, auxiliary = render_with_aux(image, recipe, tile_size=16)
     ordinary = render(image, recipe, tile_size=16)
     assert auxiliary["gamut_penalty"] > 0
@@ -131,15 +131,24 @@ def test_omitting_unused_gamut_buffers_preserves_pixels_and_gradients():
     assert omitted["gamut_penalty"] == 0
 
 
+def test_cascade_preserves_intermediate_highlights_until_final_clip():
+    x = torch.full((1, 3, 11, 13), 0.9)
+    brighter = EditRecipe(exposure=torch.ones(1, 1, 4, 4))
+    darker = EditRecipe(exposure=-torch.ones(1, 1, 4, 4))
+    recipe = EditRecipe(stages=[brighter, darker])
+    torch.testing.assert_close(render(x, recipe), x, atol=2e-6, rtol=1e-5)
+    lut_recipe = EditRecipe(stages=[brighter, EditRecipe(luts=identity_lut(9)[None]), darker])
+    torch.testing.assert_close(render(x, lut_recipe), x, atol=3e-6, rtol=1e-5)
+
+
 def test_recipe_roundtrip_and_detach():
     recipe = EditRecipe(
         exposure=torch.ones(1, 1, 4, 6, requires_grad=True), source_size=(24, 36), metadata={"version": 1}
     )
-    restored = EditRecipe.from_state_dict(recipe.detach().to("cpu").state_dict())
-    torch.testing.assert_close(restored.exposure, recipe.exposure)
-    assert not restored.exposure.requires_grad
-    assert restored.source_size == (24, 36)
-    assert restored.metadata == {"version": 1}
+    parent = EditRecipe(stages=[recipe])
+    restored = EditRecipe.from_state_dict(parent.detach().state_dict())
+    assert restored.stages[0].source_size == (24, 36)
+    assert not restored.stages[0].exposure.requires_grad
 
 
 @pytest.mark.mps

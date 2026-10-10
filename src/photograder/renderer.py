@@ -127,7 +127,10 @@ def exposure_field(local_input: Tensor, recipe: EditRecipe, upsampling: str | No
     Pass the image entering the local operator (already globally graded when
     applicable). This uses the same guide-dependent interpolation and bounds as
     rendering, so supervised map losses do not target a different upsampler.
+    A cascaded recipe must be resolved to its individual local stage first.
     """
+    if recipe.stages:
+        raise ValueError("Select an individual local recipe for exposure supervision")
     method = upsampling or recipe.metadata.get("upsampling", "guided")
     if method not in ("guided", "bilinear"):
         raise ValueError("upsampling must be guided or bilinear")
@@ -149,6 +152,21 @@ def _local(image, prepared_exposure, prepared_contrast, bounds, size, strength, 
     return linear_to_srgb(linear * ratio)
 
 
+def _bilateral(image: Tensor, grid: Tensor, bounds, size):
+    batch, _, depth, gh, gw = grid.shape
+    coefficients = _sample_region(grid.reshape(batch, 12 * depth, gh, gw), bounds, size)
+    coefficients = coefficients.reshape(batch, 12, depth, *image.shape[-2:])
+    z = luminance(image).clamp(0, 1) * (depth - 1)
+    z0 = z.floor().long().clamp(max=depth - 2)
+    f = z - z0
+    indices = z0[:, :, None].expand(-1, 12, 1, -1, -1)
+    low = torch.gather(coefficients, 2, indices).squeeze(2)
+    high = torch.gather(coefficients, 2, indices + 1).squeeze(2)
+    affine = (low * (1 - f) + high * f).reshape(batch, 3, 4, *image.shape[-2:])
+    augmented = torch.cat((image, torch.ones_like(image[:, :1])), dim=1)
+    return (affine * augmented[:, None]).sum(2)
+
+
 def render_with_aux(
     image: Tensor,
     recipe: EditRecipe,
@@ -161,9 +179,9 @@ def render_with_aux(
 ):
     """Render a recipe and expose unclipped sRGB for gamut regularization.
 
-    grade_strength controls the global transform,
+    grade_strength controls the global transform (or RGB/grid alternative),
     while local_strength scales exposure stops and log-contrast. Zero for both
-    is an exact bypass. Clip only at the final output.
+    is an exact bypass. Clip only at the final output, including for cascades.
     """
     if not 0 <= grade_strength <= 1 or not 0 <= local_strength <= 1:
         raise ValueError("Strengths must be between 0 and 1")
@@ -171,6 +189,25 @@ def render_with_aux(
         raise ValueError("Expected BCHW RGB image")
     if grade_strength == 0 and local_strength == 0:
         return (image, {"pre_gamut": image, "gamut_penalty": image.new_zeros(())})
+    if recipe.stages:
+        result = image
+        penalties = []
+        for stage in recipe.stages:
+            result, aux = render_with_aux(
+                result,
+                stage,
+                grade_strength,
+                local_strength,
+                tile_size,
+                upsampling,
+                _clip_output=False,
+                _compute_gamut=_compute_gamut,
+            )
+            penalties.append(aux["gamut_penalty"])
+        return (
+            result.clamp(0, 1) if _clip_output else result,
+            {"pre_gamut": aux["pre_gamut"], "gamut_penalty": torch.stack(penalties).mean()},
+        )
     height, width = image.shape[-2:]
     full_size = (height, width)
     method = upsampling or recipe.metadata.get("upsampling", "guided")
@@ -218,6 +255,14 @@ def render_with_aux(
                     patch = _local(
                         patch, prepared_exp, prepared_con, bounds, full_size, local_strength, radius
                     )
+            residual_strength = local_strength if recipe.metadata.get("residual_is_local") else grade_strength
+            if recipe.rgb_residual is not None and residual_strength:
+                patch = patch + residual_strength * _sample_region(recipe.rgb_residual, bounds, full_size)
+            grid_strength = local_strength if recipe.metadata.get("grid_is_local") else grade_strength
+            if recipe.bilateral_grid is not None and grid_strength:
+                patch = patch + grid_strength * (
+                    _bilateral(patch, recipe.bilateral_grid, bounds, full_size) - patch
+                )
             core = patch[..., top - y0 : bottom - y0, left - x0 : right - x0]
             columns.append(core)
         rows.append(torch.cat(columns, dim=-1))

@@ -70,8 +70,14 @@ def reconstruction(prediction, target, mask):
 
 def recipe_penalties(recipe):
     """Normalize all penalties by their number of supported samples."""
-    tensors = [getattr(recipe, name, None) for name in ("luts", "exposure", "log_contrast")]
+    tensors = [
+        getattr(recipe, name, None)
+        for name in ("luts", "exposure", "log_contrast", "rgb_residual", "bilateral_grid")
+    ]
     ref = next((value for value in tensors if isinstance(value, torch.Tensor)), None)
+    if ref is None and getattr(recipe, "stages", None):
+        totals = [recipe_penalties(stage) for stage in recipe.stages]
+        return {key: sum(item[key] for item in totals) / len(totals) for key in totals[0]}
     zero = ref.new_zeros(()) if ref is not None else torch.tensor(0.0)
     result = {key: zero for key in ("lut_smooth", "lut_monotonic", "map_smooth")}
     lut = getattr(recipe, "luts", None)
@@ -88,7 +94,8 @@ def recipe_penalties(recipe):
 
 
 def _analyze(model, image, style, bypass=False, valid_mask=None):
-    return model.analyze(image, style, bypass_global=bypass)
+    options = {"valid_mask": valid_mask} if getattr(model.config, "global_context", False) else {}
+    return model.analyze(image, style, bypass_global=bypass, **options)
 
 
 def exposure_auxiliary_loss(recipe, local_input, valid_mask, corruption):
@@ -102,7 +109,7 @@ def exposure_auxiliary_loss(recipe, local_input, valid_mask, corruption):
     from .renderer import exposure_field
 
     zero = local_input.new_zeros(())
-    if corruption is None or recipe.exposure is None:
+    if corruption is None or recipe.exposure is None or recipe.stages:
         return zero
     known = corruption["inverse_known"].to(device=local_input.device, dtype=local_input.dtype)
     weights = valid_mask * known[:, None, None, None]

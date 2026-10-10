@@ -9,6 +9,7 @@
     "map_size": 64,
     "upsampling": "guided",
     "order": "global_first",
+    "tonal_specialists": false,
     "architecture": "global"
   },
   "training": {
