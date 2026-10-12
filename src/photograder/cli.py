@@ -38,6 +38,18 @@ def main(argv=None):
     matrix = sub.add_parser("experiments")
     matrix.add_argument("matrix")
     matrix.add_argument("--execute", action="store_true")
+    app = sub.add_parser("app")
+    app.add_argument("--checkpoint", required=True)
+    app.add_argument("--device", default="auto")
+    app.add_argument("--port", type=int, default=7860)
+    grade = sub.add_parser("grade")
+    grade.add_argument("image")
+    grade.add_argument("--checkpoint", required=True)
+    grade.add_argument("--output", required=True)
+    grade.add_argument("--device", default="auto")
+    grade.add_argument("--style")
+    grade.add_argument("--grade-strength", type=float, default=1)
+    grade.add_argument("--local-strength", type=float, default=1)
     args = parser.parse_args(argv)
     if args.command == "doctor":
         from .runtime import environment_info, select_device
@@ -90,4 +102,15 @@ def main(argv=None):
         from .experiments import run_matrix
 
         result = run_matrix(args.matrix, execute=args.execute)
+    elif args.command == "app":
+        from .app import launch
+
+        launch(args.checkpoint, args.device, port=args.port)
+        return
+    elif args.command == "grade":
+        from .inference import Grader
+
+        grader = Grader(args.checkpoint, args.device)
+        analysis = grader.analyze(args.image, args.style)
+        result = grader.export(analysis, args.output, args.grade_strength, args.local_strength)
     print(json.dumps(result, indent=2, default=str))

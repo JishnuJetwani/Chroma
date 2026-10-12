@@ -18,7 +18,7 @@ The main model has 1,711,026 trainable parameters. Four convolutional stages use
 
 Exposure is bounded to ±1 stop. Contrast is represented in log₂ space and bounded to effective multipliers 0.5–2.0. The renderer converts sRGB into linear RGB, decomposes log luminance into a guided smooth base and local detail, and adds exposure while scaling detail. Ratios are applied to linear RGB to preserve chromatic relationships. Guided upsampling follows image boundaries; bilinear upsampling is an explicit alternative. LUT interpolation uses eight-corner gathers to support MPS gradients without custom CUDA code.
 
-The model separates recipe prediction from rendering. Large-image rendering reuses one whole-image recipe across overlapping tiles; zero strength is an exact tensor bypass. It cannot reconstruct information absent from clipped pixels.
+The application separates `analyze(preview, style)` from `render(original, recipe, strengths)`. Cached strength changes require no new CNN analysis. Large-image rendering reuses one whole-image recipe across overlapping tiles; zero strength is an exact image bypass. The system exports 8-bit sRGB JPEG/PNG and preserves the original file. It cannot reconstruct information absent from clipped pixels.
 
 Internal fixed-LUT, adaptive-global, cascaded-specialist, RGB-residual and bilateral-grid alternatives are implemented. Their parameter counts differ and are reported explicitly. They are not reproductions of the named external methods.
 
@@ -65,7 +65,7 @@ We separately test repair-head abstention by feeding the same held-out **human-e
 
 The paired difference, **without preservation minus with preservation**, is **−0.0052594 MAE**, 95% interval **[−0.0074551, −0.0029131]**. The corresponding changed-pixel difference is −0.42 percentage points, interval [−7.72, 8.24]. Both heads alter many pixels; the preservation variant has larger mean change, and neither demonstrates reliable abstention. This is compatible with reduced counterfactual outside drift, which compares two model outputs and does not require either to equal a clean target. Separate 64-pixel black/white/midgray/ramp/step stress fixtures remain finite but are not artistic ground truth or part of the scene-bootstrap sample.
 
-A 200-step Mac training benchmark measured a mean 0.923 seconds per two-image step with 512-pixel rendering, including loading, forward/backward and optimizer work. Metal allocation at the end was approximately 1.35 GB; this is not peak memory. Other workloads were present.
+A 200-step Mac training benchmark measured a mean 0.923 seconds per two-image step with 512-pixel rendering, including loading, forward/backward and optimizer work. Metal allocation at the end was approximately 1.35 GB; this is not peak memory. Other workloads were present. A separate final three-editor checkpoint benchmark used a 12.05-megapixel native-resolution fixture on MPS. Median cached preview rendering was 0.247 seconds; three PNG exports took 13.149, 8.624 and 8.753 seconds (median 8.753). Export timing includes tensor conversion, tiled rendering and encoding, but excludes initial decoding/model loading. Cold analysis took 3.108 seconds. End-of-run Metal allocation was 1.24 GB, not peak memory. These measurements come from a shared host and one fixture; the first export missed the ten-second target.
 
 A separate **external pretrained DeepLPF reference** uses the same 32 scenes and 256-pixel input tensors, padding/validity masks and metric-v2 implementation. All input-side metrics match the internal reports exactly. All 32 IDs occur in the pinned repository's recovered DPE test list and none in its training/validation lists. The lists were recovered from a third-party mirror, and checkpoint training history is not independently certified.
 
@@ -81,11 +81,11 @@ The central positive observation is that a simple consistency penalty can reduce
 
 The FiveK source renditions and small subset limit transfer to ordinary camera JPEGs. Synthetic perturbations do not identify whether a real highlight, silhouette or contrast choice is undesirable. Head decompositions are not unique: multiple operations can partially cancel, so map visualization is not a semantic explanation. Tests of identity, gradients, color conversion and tiled rendering establish implementation properties, not absence of artifacts on all photographs.
 
-The completed allocated-budget comparison supports improved target fit for the local system in this pilot, while the external reference exposes a remaining quality gap under unmatched training. The next empirical gates are larger-data and multiple-seed comparisons; S24 rendering/alignment validation; stronger supervision for recoverable exposure faults and abstention; and reserved personal photographs with blinded preference/artifact ratings. Any intervention prompted by this no-op result must be developed using training/validation data and assessed on a fresh reserved test set. A 60% decisive-preference rate is a project target, not a measured result. The current models remain research prototypes.
+The completed allocated-budget comparison supports improved target fit for the local system in this pilot, while the external reference exposes a remaining quality gap under unmatched training. The next empirical gates are larger-data and multiple-seed comparisons; S24 rendering/alignment validation; stronger supervision for recoverable exposure faults and abstention; and reserved personal photographs with blinded preference/artifact ratings. Any intervention prompted by this no-op result must be developed using training/validation data and assessed on a fresh reserved test set. A 60% decisive-preference rate is a project target, not a measured result. Until those gates are met, the application is labeled an early research preview.
 
 ## Reproducibility artifacts
 
-- [Project setup](../README.md)
+- [Setup and app usage](../README.md)
 - [Experiment configurations and exact replay protocol](experiments.md)
 - [Verified data and provenance](data.md)
 - [Measured results and raw-report locations](results.md)

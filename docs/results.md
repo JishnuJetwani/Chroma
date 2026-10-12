@@ -82,6 +82,30 @@ The pinned author-repository DeepLPF checkpoint was evaluated on the **same 32 s
 
 Checkpoint, source, split-list and output hashes; the exact-input audit; scored metrics; and inspectable input/output/target/mask PNGs are in `runs/deeplpf_external_32/`. The earlier four-image native-resolution smoke remains separately documented in `runs/deeplpf_external_smoke/` and is not pooled into these results. No latency conclusion is drawn from the loaded shared host.
 
+## Three-editor application pilot
+
+The final app checkpoint at `runs/multistyle_pilot/best.pt` contains **1,711,058 parameters** and styles **0 = FiveK Expert C, 1 = FiveK Expert A, 2 = FiveK Expert B**. It initialized from the selected Expert C local checkpoint, transferring the C embedding by name and initializing A/B independently. The extension trained for 20 epochs/120 allocated updates; validation selected epoch 19/update 114. Training used 16 scenes with three targets each, validation four scenes, and testing four separate scenes.
+
+| Test style (four scenes each) | Target MAE ↓ | PSNR ↑ | SSIM ↑ |
+|---|---:|---:|---:|
+| C | 0.07214 | 21.92 | 0.8871 |
+| A | 0.07983 | 20.80 | 0.9014 |
+| B | 0.05480 | 23.66 | 0.9407 |
+
+The twelve target renditions are **four independent scenes**, not twelve independent photos. These results are separate from the single-style model comparison. Changing the style on identical inputs produces non-identical outputs, but pairwise differences average only **0.78–2.12 RGB levels out of 255**, much smaller than the corresponding human-target differences. Conditioning exists but is weak; this does not establish successful reproduction of the editors' preferences. The names identify training editors, not film aesthetics.
+
+Checkpoint/initialization hashes, named-embedding transfer and registry order were verified. Metrics and style-conditioning diagnostics: `runs/multistyle_pilot/test/`. The live three-style MPS app passed the API smoke in `runs/app_smoke_multistyle.json`.
+
+## Native-resolution application benchmark
+
+The final three-editor checkpoint (1,711,058 parameters) ran on MPS using a **2832 × 4256 image (12.05 megapixels)**. This is a native-resolution Expert A rendition used only as a performance fixture, not an input/target quality test. One cold CNN analysis took **3.108 seconds**. After one preview warmup, three cached 681 × 1024 renders took **0.124 / 0.247 / 0.271 seconds** (median **0.247 seconds**).
+
+Three original-resolution PNG exports took **13.149 / 8.624 / 8.753 seconds**, median **8.753 seconds**, including source tensor conversion, tiled rendering and PNG encoding. They exclude initial file decoding and checkpoint loading. The first export exceeds the ten-second target, so this is not a latency guarantee. Source dimensions and checksum were preserved. Other host workloads were present; photo-grader training had finished before this run.
+
+Metal driver allocation at the end was **1,244,643,328 bytes**, not peak memory. Tiling bounds processing scratch but several full-frame RGB buffers remain during assembly and encoding. The implementation has tile/full-render equality tests; a scaled visual inspection of this export showed no obvious grid seams, but does not certify absence of halos or banding across photos.
+
+Raw timing, hashes and three exported PNGs: `runs/inference_12mp/benchmark.json`. The application smoke checks original-size export, all three style choices, exact zero-strength pixel bypass, clearing obsolete downloads and preserving source bytes. The application has automated export, bypass and frozen-split reconstruction checks.
+
 ## Claims not established
 
 - Novelty or state-of-the-art performance.

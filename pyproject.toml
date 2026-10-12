@@ -16,6 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+app = ["gradio>=6,<7"]
 data = ["pypng>=0.20220715.0"]
 dev = ["pytest>=8,<9", "ruff>=0.12"]
 
