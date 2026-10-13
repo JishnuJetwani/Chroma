@@ -2,7 +2,7 @@
 set -eu
 cd "${0:A:h}"
 checkpoint=""
-for candidate in runs/multistyle_pilot/best.pt runs/local_pilot/best.pt runs/global_pilot/best.pt; do
+for candidate in runs/full-7030-20261012/joint/model.pt runs/multistyle_pilot/best.pt runs/local_pilot/best.pt runs/global_pilot/best.pt; do
   if [[ -f "$candidate" ]]; then checkpoint="$candidate"; break; fi
 done
 if [[ -z "$checkpoint" ]]; then

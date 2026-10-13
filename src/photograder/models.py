@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 
 import torch
@@ -34,7 +35,7 @@ class ModelConfig:
             raise ValueError("Unknown architecture: " + self.architecture)
         if not self.styles or len(set(self.styles)) != len(self.styles):
             raise ValueError("styles must be a nonempty sequence of unique names")
-        if self.preview_size < 32 or self.map_size < 4 or self.lut_size < 2 or (self.num_luts < 1):
+        if self.preview_size < 32 or self.map_size < 4 or self.lut_size < 2 or self.num_luts < 1:
             raise ValueError("Invalid preview, map, or LUT size")
         if self.order not in ("global_first", "local_first"):
             raise ValueError("order must be global_first or local_first")
@@ -47,12 +48,14 @@ class ModelConfig:
 def _preview(image: Tensor, size: int):
     height, width = image.shape[-2:]
     scale = size / max(height, width)
-    new_h, new_w = (max(1, round(height * scale)), max(1, round(width * scale)))
+    new_h, new_w = max(1, round(height * scale)), max(1, round(width * scale))
     resized = F.interpolate(image, size=(new_h, new_w), mode="bilinear", align_corners=False)
-    top, left = ((size - new_h) // 2, (size - new_w) // 2)
-    return (
-        F.pad(resized, (left, size - new_w - left, top, size - new_h - top), mode="replicate"),
-        (top, left, new_h, new_w),
+    top, left = (size - new_h) // 2, (size - new_w) // 2
+    return F.pad(resized, (left, size - new_w - left, top, size - new_h - top), mode="replicate"), (
+        top,
+        left,
+        new_h,
+        new_w,
     )
 
 
@@ -122,6 +125,8 @@ class LUTBank(nn.Module):
     def __init__(self, count, size, initialization="legacy", strength=0.02):
         super().__init__()
         identity = identity_lut(size)
+        # Smooth distinct bases whose mean is identity. Uniform mixing starts
+        # neutral, but its logits receive useful gradients from the first step.
         values = torch.arange(count * 3, dtype=torch.float32).reshape(count, 3, 1, 1, 1)
         coefficients = torch.sin(values * 2.39996 + 0.3)
         coefficients = coefficients - coefficients.mean(dim=0, keepdim=True)
@@ -145,7 +150,7 @@ class LUTBank(nn.Module):
             weights = torch.randn(count, 3, len(features), generator=generator)
             perturbation = torch.einsum("ncf,fijk->ncijk", weights, features)
             perturbation -= perturbation.mean(dim=0, keepdim=True)
-            perturbation /= perturbation.abs().max().clamp_min(1e-08)
+            perturbation /= perturbation.abs().max().clamp_min(1e-8)
         else:
             perturbation = coefficients
         variation = strength * perturbation * identity[None] * (1 - identity[None])
@@ -155,7 +160,7 @@ class LUTBank(nn.Module):
         return torch.einsum("bn,ncijk->bcijk", weights, self.tables)
 
     def regularization(self):
-        smooth, monotonic = (self.tables.new_zeros(()), self.tables.new_zeros(()))
+        smooth, monotonic = self.tables.new_zeros(()), self.tables.new_zeros(())
         for axis in (2, 3, 4):
             diff = self.tables.diff(dim=axis)
             monotonic = monotonic + F.relu(-diff).square().mean()
@@ -165,6 +170,34 @@ class LUTBank(nn.Module):
 
 
 class RecipeModel(nn.Module):
+    def set_cnn_autocast(self, mode: str = "none") -> RecipeModel:
+        """Opt into BF16 convolutional inference/training without changing weights.
+
+        This is runtime policy, deliberately absent from state_dict/ModelConfig:
+        an existing checkpoint still loads for FP32 inference on any device.
+        Trainers must record this option in their training configuration. Keep
+        optimizer parameters, LUT tables, recipes, and rendering in FP32.
+        """
+        if mode not in ("none", "bf16"):
+            raise ValueError("CNN autocast must be 'none' or 'bf16'")
+        if mode == "bf16" and any(parameter.dtype != torch.float32 for parameter in self.parameters()):
+            raise ValueError("Keep model parameters FP32; use autocast instead of converting model weights")
+        for module in self.modules():
+            if isinstance(module, RecipeModel):
+                module._cnn_autocast_mode = mode
+        return self
+
+    @property
+    def cnn_autocast(self) -> str:
+        return getattr(self, "_cnn_autocast_mode", "none")
+
+    def _cnn_scope(self, image: Tensor):
+        if self.cnn_autocast == "none":
+            return nullcontext()
+        if image.device.type not in ("cpu", "cuda"):
+            raise ValueError("CNN BF16 autocast requires CPU or CUDA; use none on MPS")
+        return torch.autocast(device_type=image.device.type, dtype=torch.bfloat16)
+
     def forward(self, image: Tensor, style: Tensor | None = None, valid_mask: Tensor | None = None) -> Tensor:
         return render(image, self.analyze(image, style, valid_mask=valid_mask))
 
@@ -179,6 +212,8 @@ class RecipeModel(nn.Module):
             raise ValueError("style must contain one index per image")
         valid = ((style >= 0) & (style < len(self.config.styles))).all()
         if image.device.type == "cuda":
+            # Enqueue the bounds check without a GPU-to-host scalar transfer.
+            # CPU/MPS retain their ordinary, immediately raised ValueError.
             torch._assert_async(valid, "style index outside configured styles")
         elif not bool(valid):
             raise ValueError("style index outside configured styles")
@@ -218,7 +253,7 @@ class GradingModel(RecipeModel):
 
     def __init__(self, config, specialist=None):
         super().__init__()
-        self.config, self.specialist = (config, specialist)
+        self.config, self.specialist = config, specialist
         self.encoder = Encoder()
         self.style_embedding = nn.Embedding(len(config.styles), 16)
         nn.init.normal_(self.style_embedding.weight, std=0.02)
@@ -262,21 +297,25 @@ class GradingModel(RecipeModel):
         mass = weight.sum((-2, -1)).clamp_min(1)
         mean = (samples * weight).sum((-2, -1)) / mass
         variance = ((samples - mean[:, :, None, None]).square() * weight).sum((-2, -1)) / mass
-        std = variance.clamp_min(1e-08).sqrt()
+        std = variance.clamp_min(1e-8).sqrt()
+        # Explicit absolute color/exposure cues survive the encoder's GroupNorm.
         return torch.cat((mean * 2 - 1, std * 4), dim=1)
 
     def analyze(self, image, style=None, bypass_global=False, valid_mask=None):
+        # A broad caller-side autocast must not lower precision of LUT mixing.
+        # Each CNN below selectively re-enables autocast when explicitly asked.
         with torch.autocast(device_type=image.device.type, enabled=False):
             return self._analyze_fp32(image.float(), style, bypass_global, valid_mask)
 
     def _analyze_fp32(self, image, style=None, bypass_global=False, valid_mask=None):
         style = self._style(image, style)
         preview, crop = _preview(image, self.config.preview_size)
-        features = self.encoder(preview)
+        with self._cnn_scope(preview):
+            features = self.encoder(preview)
         embedding = self.style_embedding(style)
         recipe = EditRecipe(source_size=tuple(image.shape[-2:]), metadata=self._metadata())
         guide_image = preview
-        if self.has_global and (not bypass_global):
+        if self.has_global and not bypass_global:
             pooled = features[-1].float().mean((-2, -1))
             conditioning = [pooled, embedding]
             if self.config.global_context:
@@ -288,9 +327,12 @@ class GradingModel(RecipeModel):
         guide = luminance(guide_image)
         recipe.guide = _unpad(guide, crop, self.config.preview_size, self.config.map_size)
         if self.has_local:
-            output = self.decoder(features, embedding, guide)
+            with self._cnn_scope(preview):
+                output = self.decoder(features, embedding, guide)
             output = _unpad(output.float(), crop, self.config.preview_size, self.config.map_size)
             if self.config.tonal_specialists:
+                # Sign-constrained heads start at zero; clamp_min passes the
+                # boundary gradient, allowing specialization from identity.
                 bright = recipe.guide
                 highlight_gate = ((bright - 0.5) * 2).clamp(0, 1)
                 shadow_gate = ((0.5 - bright) * 2).clamp(0, 1)
@@ -306,14 +348,16 @@ class GradingModel(RecipeModel):
             elif self.specialist == "contrast":
                 recipe.exposure = None
         elif self.config.architecture == "unet":
-            output = self.decoder(features, embedding, guide)
+            with self._cnn_scope(preview):
+                output = self.decoder(features, embedding, guide)
             recipe.rgb_residual = 0.25 * torch.tanh(
                 _unpad(output.float(), crop, self.config.preview_size, self.config.map_size)
             )
             recipe.metadata["residual_is_local"] = True
         elif self.config.architecture == "bilateral":
-            spatial = F.adaptive_avg_pool2d(features[-1], (16, 16))
-            spatial_grid = self.grid_head(spatial)
+            with self._cnn_scope(preview):
+                spatial = F.adaptive_avg_pool2d(features[-1], (16, 16))
+                spatial_grid = self.grid_head(spatial)
             grid = spatial_grid.float() + self.grid_style(embedding)[:, :, None, None]
             grid = grid.reshape(image.shape[0], 12, 8, 16, 16)
             flat = _unpad(grid.flatten(1, 2), crop, self.config.preview_size, 16)
@@ -340,6 +384,7 @@ class CascadedModel(RecipeModel):
         self.global_model = GradingModel(replace(config, architecture="global"))
 
     def analyze(self, image, style=None, bypass_global=False, valid_mask=None):
+        # Analyze intermediate previews, then reuse those recipes at native size.
         height, width = image.shape[-2:]
         scale = self.config.preview_size / max(height, width)
         preview = F.interpolate(
@@ -395,15 +440,15 @@ def initialize_from_model(target: RecipeModel, source: RecipeModel) -> dict:
                 result.add((name + "." if name else "") + "bank.tables")
         return result
 
-    target_state, source_state = (target.state_dict(), source.state_dict())
-    target_style_keys, source_style_keys = (style_parameters(target), style_parameters(source))
+    target_state, source_state = target.state_dict(), source.state_dict()
+    target_style_keys, source_style_keys = style_parameters(target), style_parameters(source)
     source_indices = {name: index for index, name in enumerate(source.config.styles)}
     matching = [
         (index, source_indices[name], name)
         for index, name in enumerate(target.config.styles)
         if name in source_indices
     ]
-    compatible, copied_rows, skipped = ({}, {}, [])
+    compatible, copied_rows, skipped = {}, {}, []
     for key, value in source_state.items():
         if key not in target_state:
             skipped.append(key)
@@ -415,7 +460,7 @@ def initialize_from_model(target: RecipeModel, source: RecipeModel) -> dict:
                 key not in source_style_keys
                 or key not in target_style_keys
                 or destination.shape[1:] != value.shape[1:]
-                or (not matching)
+                or not matching
             ):
                 skipped.append(key)
                 continue

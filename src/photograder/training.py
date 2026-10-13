@@ -28,8 +28,8 @@ DEFAULTS = {
     "epochs": 10,
     "batch_size": 2,
     "accumulation_steps": 4,
-    "learning_rate": 0.0002,
-    "weight_decay": 0.0001,
+    "learning_rate": 2e-4,
+    "weight_decay": 1e-4,
     "seed": 42,
     "device": "auto",
     "patience": 8,
@@ -46,12 +46,13 @@ DEFAULTS = {
     "prefetch_factor": 2,
     "non_blocking": True,
     "max_seconds": None,
+    "encoder_autocast": "none",
 }
 LOSS_DEFAULTS = {
     "reconstruction": 1.0,
-    "lut_smooth": 0.001,
-    "lut_monotonic": 0.01,
-    "map_smooth": 0.001,
+    "lut_smooth": 1e-3,
+    "lut_monotonic": 1e-2,
+    "map_smooth": 1e-3,
     "preservation": 0.2,
     "identity": 0.1,
     "gamut": 0.01,
@@ -132,17 +133,19 @@ def _loss(model, batch, settings, weights, micro_step):
     corrupted = None
     threshold = settings.get("combined_faults_after_micro_step")
     allow_combinations = threshold is not None and micro_step >= threshold
+
     if stage == "repair":
         clean = target
         corrupted = corrupt_batch(
             clean, seed=seed, allow_identity=True, valid_mask=mask, allow_combinations=allow_combinations
         )
-        image, support = (corrupted["image"], corrupted["mask"])
+        image, support = corrupted["image"], corrupted["mask"]
         reference = clean
     elif stage == "joint" and micro_step % 4 == 3:
+        # Three real pairs, then one controlled/unchanged example.
         if micro_step % 16 == 15:
             image = target
-            bypass, identity = (True, True)
+            bypass, identity = True, True
         else:
             with torch.no_grad():
                 clean_recipe = _analyze(model, image, style, valid_mask=mask)
@@ -150,7 +153,8 @@ def _loss(model, batch, settings, weights, micro_step):
             corrupted = corrupt_batch(
                 image, seed=seed, allow_identity=False, valid_mask=mask, allow_combinations=allow_combinations
             )
-            image, support = (corrupted["image"], corrupted["mask"])
+            image, support = corrupted["image"], corrupted["mask"]
+
     recipe = _analyze(model, image, style, bypass, valid_mask=mask)
     output, auxiliary = render_with_aux(image, recipe, grade_strength=0.0 if bypass else 1.0)
     terms = {"reconstruction": reconstruction(output, target, mask)}
@@ -166,11 +170,14 @@ def _loss(model, batch, settings, weights, micro_step):
     terms["exposure_aux"] = output.new_zeros(())
     if stage == "repair" and weights.get("exposure_aux", 0) > 0:
         terms["exposure_aux"] = exposure_auxiliary_loss(recipe, image, mask, corrupted)
-    if settings["preservation"] and support is not None and (reference is not None):
+    if settings["preservation"] and support is not None and reference is not None:
+        # Dilate support before judging unaffected pixels; don't punish feather boundaries.
         outside = 1 - F.max_pool2d(support.float(), kernel_size=9, stride=1, padding=4)
         terms["preservation"] = reconstruction(output, reference, outside * mask)
-    total = sum((weights.get(name, 0) * value for name, value in terms.items()))
-    return (total, {key: value.detach() for key, value in terms.items()})
+    total = sum(weights.get(name, 0) * value for name, value in terms.items())
+    # Keep diagnostics on the training device. Python float() here would force
+    # one CUDA synchronization for every term in every microbatch.
+    return total, {key: value.detach() for key, value in terms.items()}
 
 
 def _move_batch(batch, device, non_blocking=True):
@@ -184,17 +191,39 @@ def _move_batch(batch, device, non_blocking=True):
 def _log_components(loss, components):
     names = list(components)
     values = torch.stack([loss.detach(), *(components[name] for name in names)]).float().cpu().tolist()
-    return (values[0], dict(zip(names, values[1:], strict=False)))
+    return values[0], dict(zip(names, values[1:], strict=False))
 
 
 def _check_finite(loss, device, message):
     if device.type == "cuda":
+        # CUDA checks enqueue on the same stream without a host scalar read.
+        # An invalid value aborts the stream rather than updating silently.
         torch._assert_async(torch.isfinite(loss), message)
     elif not bool(torch.isfinite(loss)):
         raise RuntimeError(message)
 
 
+class _CachedBatches:
+    """Small adapter for a dataset's explicit device-resident batch protocol."""
+
+    def __init__(self, dataset, batch_size, shuffle, seed, device):
+        self.dataset, self.batch_size = dataset, batch_size
+        self.shuffle, self.seed, self.device = shuffle, seed, device
+
+    def __len__(self):
+        return math.ceil(len(self.dataset) / self.batch_size)
+
+    def __iter__(self):
+        return iter(
+            self.dataset.iter_batches(
+                batch_size=self.batch_size, shuffle=self.shuffle, seed=self.seed, device=self.device
+            )
+        )
+
+
 def _loader(dataset, settings, device, *, shuffle, generator):
+    if hasattr(dataset, "iter_batches"):
+        return _CachedBatches(dataset, settings["batch_size"], shuffle, settings["seed"], device)
     workers = settings["num_workers"]
     options = {
         "batch_size": settings["batch_size"],
@@ -216,7 +245,7 @@ def validation_loss(model, loader, device, stage, seed, non_blocking=True):
     from .renderer import render
 
     model.eval()
-    total, count = (torch.zeros((), device=device), 0)
+    total, count = torch.zeros((), device=device), 0
     for index, batch in enumerate(loader):
         batch = _move_batch(batch, device, non_blocking)
         if stage == "repair":
@@ -276,6 +305,8 @@ def _resolve(config):
         or settings["max_seconds"] <= 0
     ):
         raise ValueError("max_seconds must be a positive finite number or null")
+    if settings["encoder_autocast"] not in ("none", "bf16"):
+        raise ValueError("encoder_autocast must be none or bf16")
     if settings["max_steps"] is not None and (
         type(settings["max_steps"]) is not int or settings["max_steps"] < 1
     ):
@@ -298,7 +329,7 @@ def train(
     validation_dataset=None,
     checkpoint_callback=None,
 ) -> dict:
-    """Train a phase with verified paired data and resumable checkpoints.
+    """Train a phase; optional cache objects provide the same manifest rows.
 
     ``validation=False`` selects only the declared schedule's final checkpoint.
     A wall-time safety stop saves a resumable last.pt, never a claimed final
@@ -326,6 +357,8 @@ def train(
     if train_dataset is None:
         manifest_info = validate_manifest(manifest)
     else:
+        # Cache construction verifies underlying data/shard hashes. Original
+        # JPEG files need not be present in the device-cache runtime.
         manifest_info = {"styles": {row["style_id"]: row["style_name"] for row in manifest_rows}}
     data_options = {"image_size": config["data"]["image_size"], "limit": config["data"]["limit"]}
     training_data = (
@@ -341,7 +374,7 @@ def train(
         )
     elif validation_dataset is not None:
         raise ValueError("validation_dataset cannot be supplied when validation=False")
-    if not len(training_data) or (settings["validation"] and (not len(validation_data))):
+    if not len(training_data) or (settings["validation"] and not len(validation_data)):
         raise ValueError("Training requires a nonempty train split and, when enabled, a nonempty val split.")
     manifest_digest = file_sha256(manifest)
     for dataset, split, limit in (
@@ -371,7 +404,7 @@ def train(
         if index >= len(model_config["styles"]) or model_config["styles"][index] != name:
             raise ValueError(f"Manifest style {index}={name!r} does not match model.styles.")
     model = build_model(ModelConfig(**model_config)).to(device)
-    initial_epoch, initial_batch, step, best, failures = (0, 0, 0, math.inf, 0)
+    initial_epoch, initial_batch, step, best, failures = 0, 0, 0, math.inf, 0
     backend = type(training_data).__module__ + "." + type(training_data).__name__
     if resume:
         if Path(resume).resolve() != (output / "last.pt").resolve():
@@ -394,6 +427,7 @@ def train(
             "preservation",
             "combined_faults_after_micro_step",
             "validation",
+            "encoder_autocast",
         ):
             if previous["training"][key] != settings[key]:
                 raise ValueError(f"Cannot change {key} on resume; use --initialize for a new experiment.")
@@ -405,7 +439,7 @@ def train(
         if previous["data"] != config["data"] or previous["loss"] != config["loss"]:
             raise ValueError("Cannot change data or loss settings on resume; use --initialize instead.")
         model = restored
-        initial_epoch, step = (payload["epoch"], payload["step"])
+        initial_epoch, step = payload["epoch"], payload["step"]
         cursor = payload.get("metadata", {}).get("resume_cursor", {})
         initial_epoch = cursor.get("epoch_index", initial_epoch)
         initial_batch = cursor.get("next_batch_index", 0)
@@ -435,6 +469,16 @@ def train(
             **initialization_report,
             "source_config": payload["model_config"],
         }
+    if hasattr(model, "set_cnn_autocast"):
+        if (
+            settings["encoder_autocast"] == "bf16"
+            and device.type == "cuda"
+            and not torch.cuda.is_bf16_supported()
+        ):
+            raise ValueError("CUDA device does not support BF16; use encoder_autocast=none")
+        model.set_cnn_autocast(settings["encoder_autocast"])
+    elif settings["encoder_autocast"] != "none":
+        raise ValueError("This model does not support scoped CNN autocast.")
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=settings["learning_rate"], weight_decay=settings["weight_decay"]
     )
@@ -451,6 +495,8 @@ def train(
         "selected_by": "validation_l1" if settings["validation"] else "fixed_schedule_final",
         "final_selected": False,
         "data_backend": backend,
+        "device_batch_cache": hasattr(training_data, "iter_batches"),
+        "encoder_autocast": settings["encoder_autocast"],
         "renderer_dtype": "float32",
         "environment": environment_info(device),
         "parameter_count": sum(p.numel() for p in model.parameters()),
@@ -563,9 +609,11 @@ def train(
             persist(checkpoint_epoch=epoch, reason=stop_reason)
             break
         train_generator.manual_seed(settings["seed"] + epoch)
+        if isinstance(loader, _CachedBatches):
+            loader.seed = settings["seed"] + epoch
         optimizer.zero_grad(set_to_none=True)
         loss_sum = torch.zeros((), device=device)
-        batches_seen, accumulated, epoch_samples = (0, 0, 0)
+        batches_seen, accumulated, epoch_samples = 0, 0, 0
         epoch_start = time.perf_counter()
         for batch_index, batch in enumerate(loader):
             if batch_index < first_batch:
@@ -631,7 +679,7 @@ def train(
             "validation_l1": val,
             "samples": epoch_samples,
             "train_seconds": train_seconds,
-            "samples_per_second": epoch_samples / max(train_seconds, 1e-09),
+            "samples_per_second": epoch_samples / max(train_seconds, 1e-9),
             "complete_epoch": complete_epoch,
             "start_batch_index": first_batch,
             "next_batch_index": next_batch,
@@ -642,15 +690,15 @@ def train(
         history.append(row)
         total_samples += epoch_samples
         print(json.dumps(row), flush=True)
-        improved = val is not None and val < best - 1e-07
+        improved = val is not None and val < best - 1e-7
         if val is not None:
             if improved:
-                best, failures = (val, 0)
+                best, failures = val, 0
             else:
                 failures += 1
-        if stop_reason is None and complete_epoch and (epoch + 1 == settings["epochs"]):
+        if stop_reason is None and complete_epoch and epoch + 1 == settings["epochs"]:
             stop_reason = "epochs"
-        if stop_reason is None and settings["validation"] and (failures >= settings["patience"]):
+        if stop_reason is None and settings["validation"] and failures >= settings["patience"]:
             stop_reason = "early_stopping"
         final_selected = not settings["validation"] and stop_reason in ("epochs", "max_steps")
         cursor = {
@@ -702,7 +750,7 @@ def train(
 
 
 def benchmark(config: dict, steps: int = 200, output_dir="runs/benchmark", *, train_dataset=None) -> dict:
-    """Measure microbatches using the configured gradient accumulation.
+    """Measure microbatches using the configured accumulation/autocast/backend.
 
     Compare samples_per_second, not step latency, when batch sizes differ.
     Unlike train(), this synchronized diagnostic does not select checkpoints.
@@ -736,6 +784,16 @@ def benchmark(config: dict, steps: int = 200, output_dir="runs/benchmark", *, tr
     if "styles" in model_config:
         model_config["styles"] = tuple(model_config["styles"])
     model = build_model(ModelConfig(**model_config)).to(device).train()
+    if (
+        settings["encoder_autocast"] == "bf16"
+        and device.type == "cuda"
+        and not torch.cuda.is_bf16_supported()
+    ):
+        raise ValueError("CUDA device does not support BF16; use encoder_autocast=none")
+    if hasattr(model, "set_cnn_autocast"):
+        model.set_cnn_autocast(settings["encoder_autocast"])
+    elif settings["encoder_autocast"] != "none":
+        raise ValueError("This model does not support scoped CNN autocast.")
     loader = _loader(
         dataset, settings, device, shuffle=False, generator=torch.Generator().manual_seed(settings["seed"])
     )
@@ -745,8 +803,8 @@ def benchmark(config: dict, steps: int = 200, output_dir="runs/benchmark", *, tr
         model.parameters(), lr=settings["learning_rate"], weight_decay=settings["weight_decay"]
     )
     iterator = iter(loader)
-    times, measured_samples, measured_updates = ([], 0, 0)
-    accumulated, batch_index = (0, 0)
+    times, measured_samples, measured_updates = [], 0, 0
+    accumulated, batch_index = 0, 0
     optimizer.zero_grad(set_to_none=True)
     for index in range(steps + 5):
         synchronize(device)
@@ -802,7 +860,7 @@ def benchmark(config: dict, steps: int = 200, output_dir="runs/benchmark", *, tr
         "measured_optimizer_updates": measured_updates,
         "samples_per_second": measured_samples / sum(times),
         "data_backend": type(dataset).__module__ + "." + type(dataset).__name__,
-        "timing_note": "Synchronized microbatches, optimizer only at configured accumulation/epoch boundaries; Compare sample throughput across batch sizes. No validation or checkpoint timing included.",
+        "timing_note": "Synchronized microbatches, optimizer only at configured accumulation/epoch boundaries; cache backends exclude initial cache preparation. Compare sample throughput across batch sizes. No validation or checkpoint timing included.",
         "parameter_count": sum(p.numel() for p in model.parameters()),
     }
     if device.type == "mps":

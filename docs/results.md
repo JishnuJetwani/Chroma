@@ -106,6 +106,52 @@ Metal driver allocation at the end was **1,244,643,328 bytes**, not peak memory.
 
 Raw timing, hashes and three exported PNGs: `runs/inference_12mp/benchmark.json`. The application smoke checks original-size export, all three style choices, exact zero-strength pixel bypass, clearing obsolete downloads and preserving source bytes. The application has automated export, bypass and frozen-split reconstruction checks.
 
+## Full downloaded-data 70/30 run (2026-10-12)
+
+The fresh Modal run uses every currently acquired public pair: 2,748 source scenes
+and 2,796 distinct scene/editor pairs. Seed `20260918` assigns 1,924 scenes (1,958
+pairs) to training and 824 scenes (838 pairs) to test. Alternate edits stay with
+their scene. No prior pilot weights initialize this run. There is no validation
+subset or test-based checkpoint selection; the selected checkpoint completes the
+fixed 10-global / 5-repair / 10-joint epoch schedule, totaling 6,125 optimizer updates.
+
+The primary Expert C results use all 824 held-out C targets at 256px:
+
+| Output | PSNR ↑ | SSIM ↑ | CIE76 color error ↓ |
+|---|---:|---:|---:|
+| Unedited input | 18.339 dB | 0.7906 | 16.297 |
+| Global stage final | 21.974 dB | 0.8676 | 10.254 |
+| Joint stage final | **23.981 dB** | **0.8958** | **8.346** |
+
+The paired joint-minus-global PSNR gain is **2.007 dB**, with a scene-bootstrap
+95% interval of **[1.748, 2.255]**. Newly clipped highlight pixels increase by
+**0.227 percentage points** versus global-only (interval [0.181, 0.281]); this
+requires visual inspection and is not automatically an unwanted photographic
+edit. Global and joint have different total training budgets, so this is not a
+controlled attribution of the gain to the local heads or preservation loss.
+These scores also cannot be directly compared with the earlier 32-scene test
+averages: this is a different, custom split. SSIM is not an accuracy percentage.
+
+Training-only throughput checks selected FP32 microbatch eight, accumulation one,
+over microbatch two/accumulation four and CNN-only BF16. Measured projected training
+throughput improved about 3.5× versus the former batching configuration. The actual
+optimizer loops took **123.9 seconds**; recorded GPU function work, including
+benchmarking, cache loading, checkpoint I/O and evaluation across two attempts,
+took **364.1 seconds**. Estimated function compute is **$0.432**, excluding CPU
+preparation, startup/idle, any unrecorded cancellation tail, storage and credits.
+The first attempt was cancelled after completing global and repair; the resumed
+attempt reused their committed final checkpoints and completed joint training.
+
+The 1,711,058-parameter final checkpoint passed local MPS inference for all three
+styles, exact zero-strength bypass and original-size PNG export with source-byte
+preservation. The local app launcher now prefers this checkpoint. A/B each have
+only 17 training and seven test scenes, so broad preset learning remains unproven.
+
+Artifacts: `runs/full-7030-20261012/REPORT.md`, `holdout_summary.json`, stage configs,
+histories and source/checkpoint hashes, `joint/model.pt`, and
+`local_checkpoint_verification.json`. Real CUDA training and finite-gradient checks ran on the H100; local tests cover the data and rendering paths. No synthetic-control sweep, human preference
+study, or repeat of the native 12MP benchmark was performed for these new weights.
+
 ## Claims not established
 
 - Novelty or state-of-the-art performance.

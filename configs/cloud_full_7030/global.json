@@ -1,0 +1,42 @@
+{
+  "model": {
+    "architecture": "global",
+    "styles": [
+      "FiveK Expert C",
+      "FiveK Expert A",
+      "FiveK Expert B"
+    ],
+    "preview_size": 256,
+    "lut_size": 33,
+    "num_luts": 8,
+    "map_size": 64,
+    "upsampling": "guided",
+    "order": "global_first"
+  },
+  "data": {
+    "manifest": "/data/cloud_full_7030/manifest.jsonl",
+    "image_size": 256,
+    "limit": null
+  },
+  "training": {
+    "stage": "global",
+    "epochs": 10,
+    "batch_size": 8,
+    "accumulation_steps": 1,
+    "learning_rate": 0.0002,
+    "weight_decay": 0.0001,
+    "seed": 20260918,
+    "device": "cuda",
+    "validation": false,
+    "num_workers": 0,
+    "cpu_threads": 4,
+    "preservation": true,
+    "encoder_autocast": "none",
+    "max_steps": null,
+    "max_seconds": 3600,
+    "log_every": 100
+  },
+  "loss": {},
+  "output_dir": "/runs/RUN_ID/global",
+  "runtime_selection_note": "Template: cloud runner replaces microbatch/accumulation and CNN precision after training-only throughput checks, and uses the remaining shared wall-time budget."
+}
