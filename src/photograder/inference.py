@@ -33,6 +33,7 @@ class Analysis:
     recipe: EditRecipe
     style: str
     analysis_seconds: float
+    backlight_recipe: EditRecipe | None = None
 
 
 class Grader:
@@ -56,7 +57,7 @@ class Grader:
         with Image.open(path) as check:
             if getattr(check, "n_frames", 1) != 1:
                 raise ValueError("Choose a still image; animated images are not supported.")
-            if check.width * check.height > 60000000:
+            if check.width * check.height > 60_000_000:
                 raise ValueError("Please use a photo no larger than 60 megapixels.")
             if "A" in check.getbands() or "transparency" in check.info:
                 alpha = ImageOps.exif_transpose(check).convert("RGBA").getchannel("A")
@@ -72,6 +73,7 @@ class Grader:
             raise ValueError(f"Unknown style: {style}")
         preview = original.copy()
         preview.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+        # Analysis needs only the preview. Maps retain normalized source coordinates.
         source = image_tensor(preview, self.device)
         style_id = torch.tensor([self.styles.index(style)], device=self.device)
         synchronize(self.device)
@@ -81,11 +83,25 @@ class Grader:
         return Analysis(str(path.resolve()), original, preview, recipe, style, time.perf_counter() - started)
 
     @torch.inference_mode()
-    def render_preview(self, analysis: Analysis, grade_strength=1.0, local_strength=1.0):
+    def _recipe(self, analysis: Analysis, treatment: str):
+        if treatment == "model":
+            return analysis.recipe
+        if treatment != "backlight":
+            raise ValueError("Unknown treatment")
+        if analysis.backlight_recipe is None:
+            from .backlight import prepare_backlight_recipe
+
+            analysis.backlight_recipe = prepare_backlight_recipe(
+                analysis.recipe, image_tensor(analysis.preview, self.device)
+            )
+        return analysis.backlight_recipe
+
+    @torch.inference_mode()
+    def render_preview(self, analysis: Analysis, grade_strength=1.0, local_strength=1.0, treatment="model"):
         source = image_tensor(analysis.preview, self.device)
         output = render(
             source,
-            analysis.recipe,
+            self._recipe(analysis, treatment),
             grade_strength=float(grade_strength),
             local_strength=float(local_strength),
             tile_size=512,
@@ -93,7 +109,14 @@ class Grader:
         return tensor_image(output)
 
     @torch.inference_mode()
-    def export(self, analysis: Analysis, destination: str | Path, grade_strength=1.0, local_strength=1.0):
+    def export(
+        self,
+        analysis: Analysis,
+        destination: str | Path,
+        grade_strength=1.0,
+        local_strength=1.0,
+        treatment="model",
+    ):
         destination = Path(destination)
         if destination.resolve() == Path(analysis.source_path).resolve():
             raise ValueError("Export must use a new file; the original is preserved.")
@@ -105,7 +128,7 @@ class Grader:
         started = time.perf_counter()
         result = render(
             source,
-            analysis.recipe,
+            self._recipe(analysis, treatment),
             grade_strength=float(grade_strength),
             local_strength=float(local_strength),
             tile_size=512,
@@ -124,9 +147,10 @@ class Grader:
             "seconds": time.perf_counter() - started,
             "style": analysis.style,
             "checkpoint": self.checkpoint_path,
+            "treatment": treatment,
         }
 
-    def save_recipe(self, analysis: Analysis, destination):
+    def save_recipe(self, analysis: Analysis, destination, treatment="model"):
         destination = Path(destination)
         if destination.exists() or destination.resolve() == Path(analysis.source_path).resolve():
             raise FileExistsError("Recipe export must use a new file; existing files are preserved.")
@@ -134,7 +158,8 @@ class Grader:
         torch.save(
             {
                 "format_version": 1,
-                "recipe": analysis.recipe.to("cpu").state_dict(),
+                "recipe": self._recipe(analysis, treatment).to("cpu").state_dict(),
+                "treatment": treatment,
                 "style": analysis.style,
                 "checkpoint": self.checkpoint_path,
                 "checkpoint_sha256": file_sha256(self.checkpoint_path),

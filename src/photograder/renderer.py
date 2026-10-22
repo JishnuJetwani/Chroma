@@ -66,14 +66,14 @@ def box_filter(image: Tensor, radius: int) -> Tensor:
     return (sums[..., kernel:, :] - sums[..., :-kernel, :]) / kernel
 
 
-def guided_coefficients(guide: Tensor, field: Tensor, radius: int = 2, eps: float = 0.001):
+def guided_coefficients(guide: Tensor, field: Tensor, radius: int = 2, eps: float = 1e-3):
     guide = F.interpolate(guide, size=field.shape[-2:], mode="bilinear", align_corners=False)
-    mean_i, mean_p = (box_filter(guide, radius), box_filter(field, radius))
+    mean_i, mean_p = box_filter(guide, radius), box_filter(field, radius)
     variance = (box_filter(guide * guide, radius) - mean_i.square()).clamp_min(0)
     covariance = box_filter(guide * field, radius) - mean_i * mean_p
     slope = covariance / (variance + eps)
     intercept = mean_p - slope * mean_i
-    return (box_filter(slope, radius), box_filter(intercept, radius))
+    return box_filter(slope, radius), box_filter(intercept, radius)
 
 
 def _sample_region(field: Tensor, bounds: tuple[int, int, int, int], size: tuple[int, int]) -> Tensor:
@@ -87,9 +87,9 @@ def _sample_region(field: Tensor, bounds: tuple[int, int, int, int], size: tuple
     xs = (
         (torch.arange(left, right, device=field.device, dtype=field.dtype) + 0.5) * in_w / out_w - 0.5
     ).clamp(0, in_w - 1)
-    y0, x0 = (ys.floor().long(), xs.floor().long())
-    y1, x1 = ((y0 + 1).clamp(max=in_h - 1), (x0 + 1).clamp(max=in_w - 1))
-    fy, fx = ((ys - y0)[:, None], (xs - x0)[None, :])
+    y0, x0 = ys.floor().long(), xs.floor().long()
+    y1, x1 = (y0 + 1).clamp(max=in_h - 1), (x0 + 1).clamp(max=in_w - 1)
+    fy, fx = (ys - y0)[:, None], (xs - x0)[None, :]
     flat = field.flatten(2)
     output = None
     for yy, wy in ((y0, 1 - fy), (y1, fy)):
@@ -141,8 +141,10 @@ def exposure_field(local_input: Tensor, recipe: EditRecipe, upsampling: str | No
 
 def _local(image, prepared_exposure, prepared_contrast, bounds, size, strength, radius):
     linear = srgb_to_linear(image)
-    light = luminance(linear).clamp_min(1e-06)
+    light = luminance(linear).clamp_min(1e-6)
     log_light = torch.log2(light)
+    # A self-guided base preserves strong scene edges. Two box-filter passes
+    # require a 2*radius halo when rendering in tiles.
     slope, intercept = guided_coefficients(log_light, log_light, radius=radius, eps=0.05)
     detail = log_light - (slope * log_light + intercept)
     guide = luminance(image)
@@ -188,7 +190,7 @@ def render_with_aux(
     if image.ndim != 4 or image.shape[1] != 3:
         raise ValueError("Expected BCHW RGB image")
     if grade_strength == 0 and local_strength == 0:
-        return (image, {"pre_gamut": image, "gamut_penalty": image.new_zeros(())})
+        return image, {"pre_gamut": image, "gamut_penalty": image.new_zeros(())}
     if recipe.stages:
         result = image
         penalties = []
@@ -204,10 +206,10 @@ def render_with_aux(
                 _compute_gamut=_compute_gamut,
             )
             penalties.append(aux["gamut_penalty"])
-        return (
-            result.clamp(0, 1) if _clip_output else result,
-            {"pre_gamut": aux["pre_gamut"], "gamut_penalty": torch.stack(penalties).mean()},
-        )
+        return result.clamp(0, 1) if _clip_output else result, {
+            "pre_gamut": aux["pre_gamut"],
+            "gamut_penalty": torch.stack(penalties).mean(),
+        }
     height, width = image.shape[-2:]
     full_size = (height, width)
     method = upsampling or recipe.metadata.get("upsampling", "guided")
@@ -221,16 +223,29 @@ def render_with_aux(
     if size <= 0:
         raise ValueError("tile_size must be positive")
     order = recipe.metadata.get("order", "global_first")
+    interpolation = recipe.metadata.get("lut_interpolation", "trilinear")
+    if interpolation not in ("trilinear", "tetrahedral"):
+        raise ValueError("Unknown LUT interpolation")
 
     def grade(patch):
         if recipe.luts is None or grade_strength == 0:
             return patch
-        graded = apply_lut(patch, recipe.luts, extrapolate=True)
+        # Extend boundary cells linearly for intermediate values outside sRGB.
+        # Clamping LUT inputs here would discard recoverable cascade highlights.
+        if interpolation == "tetrahedral":
+            from .lut_safety import apply_tetrahedral_lut
+
+            graded = apply_tetrahedral_lut(patch, recipe.luts, extrapolate=True)
+        else:
+            graded = apply_lut(patch, recipe.luts, extrapolate=True)
         return patch + grade_strength * (graded - patch)
 
     rows = []
+    raw_rows = []
+    backlight = recipe.metadata.get("backlight")
     for top in range(0, height, size):
         columns = []
+        raw_columns = []
         bottom = min(top + size, height)
         for left in range(0, width, size):
             right = min(left + size, width)
@@ -264,16 +279,31 @@ def render_with_aux(
                     _bilateral(patch, recipe.bilateral_grid, bounds, full_size) - patch
                 )
             core = patch[..., top - y0 : bottom - y0, left - x0 : right - x0]
+            if backlight is not None:
+                from .backlight import finish_backlight
+
+                raw_columns.append(core)
+                # The policy is global and cached; pointwise finishing needs no
+                # halo. Keep its temporary buffers bounded by this output tile.
+                core = finish_backlight(
+                    image[..., top:bottom, left:right],
+                    core.clamp(0, 1) if _clip_output else core,
+                    backlight,
+                    grade_strength,
+                    local_strength,
+                )
             columns.append(core)
         rows.append(torch.cat(columns, dim=-1))
+        if backlight is not None:
+            raw_rows.append(torch.cat(raw_columns, dim=-1))
     output = torch.cat(rows, dim=-2)
-    raw = output
+    raw = torch.cat(raw_rows, dim=-2) if backlight is not None else output
     penalty = (
         (F.relu(-raw).square() + F.relu(raw - 1).square()).mean() if _compute_gamut else image.new_zeros(())
     )
-    if _clip_output:
+    if backlight is None and _clip_output:
         output = raw.clamp(0, 1)
-    return (output, {"pre_gamut": raw, "gamut_penalty": penalty})
+    return output, {"pre_gamut": raw, "gamut_penalty": penalty}
 
 
 def render(
