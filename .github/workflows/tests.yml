@@ -1,0 +1,37 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu:
+    runs-on: ubuntu-latest
+    env:
+      GRADIO_ANALYTICS_ENABLED: "False"
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y liblcms2-2
+          python -m pip install 'uv==0.11.28'
+          uv sync --locked --extra app --extra data --extra raw --extra dev
+      - name: Lint and format
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+      - name: Test
+        run: uv run --no-sync pytest -q
+      - name: Build and smoke-test the package
+        run: |
+          uv build --wheel --out-dir dist
+          uv run --no-sync photograder --help

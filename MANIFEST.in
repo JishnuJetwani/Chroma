@@ -1,0 +1,6 @@
+include README.md uv.lock run_app.command modal_train.py modal_raw_train.py
+recursive-include configs *.json
+recursive-include docs *.md *.json
+recursive-include scripts *.py
+recursive-include tests *.py
+include requirements-cloud.txt requirements-raw.txt
