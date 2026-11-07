@@ -147,7 +147,44 @@ def benchmark_candidate(dataset, cache, output, batch_size, precision, deadline=
     return result
 
 
-def run(cache: Path, output: Path, budget_seconds=3600, commit=lambda: None, resume=False):
+def validate_cache_protocol(cache, index, expected=None):
+    """Require an independently frozen manifest and exact counts before fitting."""
+    expected = expected or {
+        "manifest_sha256": MANIFEST_SHA256,
+        "scene_counts": {"train": 1924, "test": 824},
+        "row_counts": {"train": 1958, "val": 0, "test": 838},
+        "seed": SEED,
+        "schedule": dict(STAGES),
+    }
+    digest = expected["manifest_sha256"]
+    if index["manifest_sha256"] != digest or file_sha256(Path(cache) / "manifest.jsonl") != digest:
+        raise ValueError("Manifest differs from the independently frozen public split")
+    if index["seed"] != SEED or expected["seed"] != SEED or not index["requires_training_from_scratch"]:
+        raise ValueError("Unexpected split seed or initialization policy")
+    if expected["schedule"] != dict(STAGES):
+        raise ValueError("Unexpected fixed training schedule")
+    if index["outer_scene_counts"] != expected["scene_counts"] or index["inner_val_fraction"] != 0:
+        raise ValueError("Unexpected scene split or validation policy")
+    if index["row_counts"] != expected["row_counts"]:
+        raise ValueError("Unexpected number of unique scene/style pairs")
+    if "parent_manifest_sha256" in expected and (
+        expected["parent_manifest_sha256"] != MANIFEST_SHA256
+        or index["source_caches"][0]["manifest_sha256"] != MANIFEST_SHA256
+    ):
+        raise ValueError("Expanded experiment does not preserve the recorded parent dataset")
+    return expected
+
+
+def run(
+    cache: Path,
+    output: Path,
+    budget_seconds=3600,
+    commit=lambda: None,
+    resume=False,
+    expected_protocol=None,
+    baseline_checkpoint=None,
+    baseline_sha256=None,
+):
     from .cloud_data import CachedPairedDataset
     from .training import train
 
@@ -168,19 +205,13 @@ def run(cache: Path, output: Path, budget_seconds=3600, commit=lambda: None, res
     # Preserve FP32 matmul semantics; BF16 is restricted to the CNN if it wins.
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
-    output.mkdir(parents=True, exist_ok=resume)
     index = json.loads((cache / "index.json").read_text())
-    if (
-        index["manifest_sha256"] != MANIFEST_SHA256
-        or file_sha256(cache / "manifest.jsonl") != MANIFEST_SHA256
-    ):
-        raise ValueError("Manifest differs from the frozen, locally verified public 70/30 split")
-    if index["seed"] != SEED or not index["requires_training_from_scratch"]:
-        raise ValueError("Unexpected split seed or initialization policy")
-    if index["outer_scene_counts"] != {"train": 1924, "test": 824} or index["inner_val_fraction"] != 0:
-        raise ValueError("Unexpected split: expected fixed 1924/824 scenes, no validation")
-    if index["row_counts"] != {"train": 1958, "val": 0, "test": 838}:
-        raise ValueError("Unexpected number of unique scene/style pairs")
+    expected_protocol = validate_cache_protocol(cache, index, expected_protocol)
+    if baseline_checkpoint is not None:
+        baseline_checkpoint = Path(baseline_checkpoint)
+        if not baseline_sha256 or file_sha256(baseline_checkpoint) != baseline_sha256:
+            raise ValueError("Previous model checksum differs from the frozen comparison checkpoint")
+    output.mkdir(parents=True, exist_ok=resume)
     report = {
         "status": "preparing",
         "seed": SEED,
@@ -192,6 +223,9 @@ def run(cache: Path, output: Path, budget_seconds=3600, commit=lambda: None, res
         "cache_index_sha256": file_sha256(cache / "index.json"),
         "scene_counts": index["outer_scene_counts"],
         "pair_counts": index["row_counts"],
+        "frozen_protocol": expected_protocol,
+        "comparison_checkpoint": str(baseline_checkpoint) if baseline_checkpoint is not None else None,
+        "comparison_checkpoint_sha256": baseline_sha256,
         "selection": "Fixed final schedule; test is never used to select settings or checkpoints",
         "initialization": "From scratch; no prior pilot checkpoints",
         "budget_seconds": budget_seconds,
@@ -258,7 +292,14 @@ def run(cache: Path, output: Path, budget_seconds=3600, commit=lambda: None, res
             selected = report["selected"]
         else:
             candidates = []
-            for batch_size, precision in ((2, "none"), (8, "none"), (8, "bf16")):
+            settings = expected_protocol.get("runtime")
+            choices = ((2, "none"), (8, "none"), (8, "bf16"))
+            if settings is not None:
+                fixed = (settings["batch_size"], settings["encoder_autocast"])
+                if fixed not in choices:
+                    raise ValueError("Unsupported frozen runtime settings")
+                choices = (fixed,)
+            for batch_size, precision in choices:
                 candidates.append(benchmark_candidate(data, cache, output, batch_size, precision, deadline))
             selected = min(
                 (item for item in candidates if item["valid"]),
@@ -360,9 +401,11 @@ def run(cache: Path, output: Path, budget_seconds=3600, commit=lambda: None, res
                 _check_deadline(deadline)
                 yield batch
 
-        for stage in ("global", "joint"):
+        evaluations = [(stage, output / stage / "final.pt") for stage in ("global", "joint")]
+        if baseline_checkpoint is not None:
+            evaluations.append(("previous", baseline_checkpoint))
+        for stage, checkpoint in evaluations:
             _check_deadline(deadline)
-            checkpoint = output / stage / "final.pt"
             model, payload = load_checkpoint(checkpoint, "cuda")
             # Report normal FP32 inference, as used by the desktop app.
             metrics = evaluate(
@@ -376,7 +419,7 @@ def run(cache: Path, output: Path, budget_seconds=3600, commit=lambda: None, res
                     "image_size": 256,
                     "batch_size": 8,
                     "manifest_sha256": index["manifest_sha256"],
-                    "scene_count": 824,
+                    "scene_count": index["outer_scene_counts"]["test"],
                     "checkpoint_selection": "fixed_schedule_final",
                     "test_used_for_tuning": False,
                     "inference_precision": "float32",
@@ -385,6 +428,10 @@ def run(cache: Path, output: Path, budget_seconds=3600, commit=lambda: None, res
                 seed=SEED,
             )
             report["evaluations"][stage] = {key: value["mean"] for key, value in metrics["metrics"].items()}
+            if stage == "previous":
+                del model
+                gc.collect()
+                continue
             # Small portable inference artifact; full optimizer checkpoints stay
             # on the Volume for resumption instead of duplicating them locally.
             portable = output / stage / "model.pt"

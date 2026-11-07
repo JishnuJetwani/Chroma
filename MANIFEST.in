@@ -1,4 +1,4 @@
-include README.md uv.lock run_app.command modal_train.py modal_raw_train.py
+include README.md uv.lock run_app.command modal_train.py modal_raw_train.py modal_fivek_full.py
 recursive-include configs *.json
 recursive-include docs *.md *.json
 recursive-include scripts *.py
