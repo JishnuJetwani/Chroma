@@ -2,6 +2,22 @@
 
 Automatic photo grading with a small CNN, learned color tables, and local exposure and contrast adjustments. Analyze a photo once, adjust the strength, and export at its original resolution. The app runs locally.
 
+**Before → after** · Original on the left, graded result on the right.
+
+**Flower**
+
+![Flower before and after automatic JPEG grading](docs/examples/flower-before-after.png)
+
+**Paris at night**
+
+![Paris at night before and after automatic JPEG grading](docs/examples/paris-before-after.png)
+
+**Rainy street**
+
+![Rainy street before and after, shown in the supplied comparison](docs/examples/rainy-street-before-after.png)
+
+Flower and Paris images are from MIT–Adobe FiveK. [Image sources and research licenses](docs/examples/README.md).
+
 The main JPEG model has **1.71 million parameters**. On 824 held-out FiveK photos, it reached **23.98 dB PSNR / 0.8958 SSIM**, compared with **18.34 dB / 0.7906** for the unedited inputs. These measure agreement with Expert C, not aesthetic quality. [Benchmark and limitations](docs/reports/jpeg.md).
 
 ## Try it
@@ -106,4 +122,4 @@ Tests cover LUT gradients, identity behavior, tiled rendering, scene-split integ
 
 This project uses established ideas from [Image-Adaptive 3D LUTs](https://github.com/HuiZeng/Image-Adaptive-3DLUT), [DeepLPF](https://github.com/sjmoran/deeplpf-image-enhancement), and related local-enhancement research. It is a personal research implementation, not a claim of a new state-of-the-art method. [Related work](docs/research.md).
 
-No code license is granted at present. The [MIT–Adobe FiveK dataset](https://data.csail.mit.edu/graphics/fivek/) and other external materials retain their own terms. Dataset photos, private uploads, training logs, credentials, and model binaries are excluded from Git. The trained weights do not come with a commercial-use permission grant from this project.
+No code license is granted at present. The [MIT–Adobe FiveK dataset](https://data.csail.mit.edu/graphics/fivek/) and other external materials retain their own terms. The examples above are included for illustration; full datasets, training logs, credentials, and model binaries are excluded from Git. The trained weights do not come with a commercial-use permission grant from this project.
