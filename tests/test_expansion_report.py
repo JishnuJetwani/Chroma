@@ -44,6 +44,7 @@ def test_report_uses_same_photos_and_separates_new_holdout(tmp_path):
                 "ssim": 0.9,
                 "delta_e76": 8,
                 "new_clipped_high_fraction": 0.01,
+                "new_clipped_low_fraction": 0.01,
                 "input_psnr": 18,
                 "input_ssim": 0.8,
                 "input_delta_e76": 16,

@@ -4,6 +4,7 @@ Start with the [project README](../README.md) to run the JPEG app.
 
 - [Model card](model-card.md): checkpoint identity, training protocol, and limitations.
 - [JPEG benchmark](reports/jpeg.md) and [metrics](reports/jpeg-metrics.json).
+- [Complete FiveK results](reports/full-fivek.md), [metrics](reports/full_fivek_summary.json), and [training protocol](full-fivek-training.md).
 - [Training and research workflow](usage.md): full commands and experimental options.
 - [Data preparation](data.md) and [Modal training](modal_training.md).
 - [Architecture and related work](research.md), [experiment protocols](experiments.md), and [pilot results](results.md).

@@ -16,9 +16,9 @@ Automatic photo grading with a small CNN, learned color tables, and local exposu
 
 ![Rainy street before and after, shown in the supplied comparison](docs/examples/rainy-street-before-after.png)
 
-Flower and Paris images are from MIT–Adobe FiveK. [Image sources and research licenses](docs/examples/README.md).
+Flower and Paris images are from MIT–Adobe FiveK and show the original JPEG checkpoint. [Image sources and research licenses](docs/examples/README.md).
 
-The main JPEG model has **1.71 million parameters**. On 824 held-out FiveK photos, it reached **23.98 dB PSNR / 0.8958 SSIM**, compared with **18.34 dB / 0.7906** for the unedited inputs. These measure agreement with Expert C, not aesthetic quality. [Benchmark and limitations](docs/reports/jpeg.md).
+The JPEG model has **1.71 million parameters**. The latest run uses all 5,000 FiveK scenes, split into **3,500 training / 1,500 test photos**, and reaches **24.45 dB PSNR / 0.9038 SSIM**. The previous model scores **24.13 dB / 0.8987** on those same 1,500 photos. These measure agreement with Expert C, not aesthetic quality. [Full-FiveK results and limitations](docs/reports/full-fivek.md).
 
 ## Try it
 
@@ -38,6 +38,8 @@ uv run --no-sync photograder app --checkpoint checkpoints/jpeg.pt
 Open **http://127.0.0.1:7860**, upload a JPEG or PNG, and press **Auto Grade**. The overall-grade and local-correction sliders reuse the cached prediction. Export creates a new file and preserves the original.
 
 **Weights are separate from the source repository.** There is no hosted download yet. The existing local checkpoint at `runs/full-7030-20261012/joint/model.pt` also works with `--checkpoint`. See the [model card](docs/model-card.md) for its checksum, training data, and limitations, or train your own using the commands below. On macOS, `run_app.command` discovers either location.
+
+The latest full-FiveK checkpoint is `runs/fivek-5000-7030-20261107/joint/model.pt`; select it explicitly with `--checkpoint`. Its checksum and training protocol are in the [full-FiveK report](docs/reports/full-fivek.md).
 
 To grade a single image without opening the app:
 
@@ -59,7 +61,7 @@ The code also includes a fixed LUT baseline, cascaded specialists, an RGB-residu
 
 ## Data and training
 
-The current JPEG run uses **2,748 unique FiveK scenes**, not the entire 5,000-photo dataset: 1,924 for training and 824 for testing. The main target is Expert C. Editors A/B each have only 17 training scenes, so those extra styles are exploratory. S24 has an importer but was not used in the reported runs.
+The latest JPEG run uses **all 5,000 FiveK scenes**: 3,500 for training and 1,500 for testing. It expands the original 2,748-scene run while preserving every existing train/test assignment. The main target is Expert C. Editors A/B each still have only 17 training scenes, so those extra styles are exploratory. S24 has an importer but was not used in the reported runs. [Full-data acquisition and training](docs/full-fivek-training.md).
 
 For a small pipeline check:
 
@@ -80,6 +82,8 @@ This small run checks the pipeline; it does not reproduce the main benchmark. Al
 
 ## Results
 
+The original checkpoint, shown in the flower and Paris examples, scored as follows on its 824-photo Expert C holdout:
+
 | Output on Expert C holdout | PSNR ↑ | SSIM ↑ | Color error, CIE76 ↓ |
 |---|---:|---:|---:|
 | Original input | 18.34 dB | 0.7906 | 16.30 |
@@ -87,6 +91,8 @@ This small run checks the pipeline; it does not reproduce the main benchmark. Al
 | Global + local model | **23.98 dB** | **0.8958** | **8.35** |
 
 The global and final models have different total training budgets, so this comparison does not isolate the effect of the local architecture. The custom split and 256-pixel evaluation also differ from other published FiveK protocols. [Detailed report](docs/reports/jpeg.md) · [Metrics and confidence intervals](docs/reports/jpeg-metrics.json).
+
+Training on the full dataset improves the original 824-photo score to **24.32 dB**, and scores **24.45 dB** across the expanded 1,500-photo holdout. The improvement over the previous model on the same 1,500 photos is **+0.319 dB**, with a paired scene-bootstrap 95% interval of **[+0.233, +0.400]**. Highlight clipping decreases, while shadow clipping increases; more data also means more optimizer updates at the same epoch count. [Full comparison](docs/reports/full-fivek.md).
 
 Highlights already clipped in a JPEG cannot be recovered. Aggressive corrections can introduce clipping or banding. The experimental backlight treatment is optional and is **not** the model measured in the table.
 

@@ -67,7 +67,7 @@ def summarize(run_directory, registry_path):
                 if not all(math.isfinite(value) for value in values):
                     raise ValueError("Missing or nonfinite primary metric")
                 group["models"][label][metric] = scene_bootstrap(values, scenes, seed=run["seed"])
-        for metric in ("psnr", "ssim", "delta_e76", "new_clipped_high_fraction"):
+        for metric in ("psnr", "ssim", "delta_e76", "new_clipped_high_fraction", "new_clipped_low_fraction"):
             differences = [
                 float(records["joint"][key][metric]) - float(records["previous"][key][metric]) for key in keys
             ]
@@ -118,6 +118,14 @@ def summarize(run_directory, registry_path):
         f"Recorded training-function time including cache loading and all three evaluations: {run['elapsed_seconds'] / 60:.2f} minutes on {run['gpu']}. Estimated function compute: ${run['estimated_compute_usd']:.3f}; this is not a bill and excludes CPU preparation, image building, startup/idle, storage, and credits.",
         "",
     ]
+    for label, metric in (("highlight", "new_clipped_high_fraction"), ("shadow", "new_clipped_low_fraction")):
+        delta = report["cohorts"]["all"]["joint_minus_previous"][metric]
+        lines.append(
+            f"Newly clipped {label} pixels change by {100 * delta['mean']:+.3f} percentage points versus the previous model "
+            f"(paired 95% CI [{100 * delta['ci_low']:+.3f}, {100 * delta['ci_high']:+.3f}]). "
+            "This is an artifact measure, not an aesthetic preference result."
+        )
+    lines.append("")
     lines.extend(f"- {item}." for item in report["limitations"])
     lines += [
         "",

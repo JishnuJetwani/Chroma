@@ -1,0 +1,588 @@
+{
+  "manifest_sha256": "1d502cf6876a4161867bbe900a7bb4403d0f2d3f2ca9bbb7241f3a0271dd9bc2",
+  "primary_style": "FiveK Expert C",
+  "scene_counts": {
+    "train": 3500,
+    "test": 1500
+  },
+  "pair_counts": {
+    "train": 3534,
+    "val": 0,
+    "test": 1514
+  },
+  "schedule": {
+    "global": 10,
+    "repair": 5,
+    "joint": 10
+  },
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "cohorts": {
+    "all": {
+      "scenes": 1500,
+      "models": {
+        "input": {
+          "psnr": {
+            "mean": 18.413548480351768,
+            "ci_low": 18.160219306405384,
+            "ci_high": 18.6902270452102,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.7923672088781992,
+            "ci_low": 0.7870790934423606,
+            "ci_high": 0.7974997875357668,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 16.199849869251253,
+            "ci_low": 15.858978419943652,
+            "ci_high": 16.5490017584006,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        },
+        "previous": {
+          "psnr": {
+            "mean": 24.126881591796874,
+            "ci_low": 23.904882466777163,
+            "ci_high": 24.35543269575437,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.8987086295882861,
+            "ci_low": 0.8947425256599983,
+            "ci_high": 0.90293243517826,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 8.22435919602712,
+            "ci_low": 8.017420538781087,
+            "ci_high": 8.426423865302404,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        },
+        "global": {
+          "psnr": {
+            "mean": 22.208237375895184,
+            "ci_low": 21.970646305322646,
+            "ci_high": 22.449952281618117,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.8714580888400475,
+            "ci_low": 0.8667585615210235,
+            "ci_high": 0.8762722274716943,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 9.939550146897634,
+            "ci_low": 9.675603483204046,
+            "ci_high": 10.21424099200964,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        },
+        "joint": {
+          "psnr": {
+            "mean": 24.4456764087677,
+            "ci_low": 24.219431586949028,
+            "ci_high": 24.673759353208542,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.9037513182560603,
+            "ci_low": 0.8998649814099073,
+            "ci_high": 0.9079126332481703,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 7.98291475145022,
+            "ci_low": 7.776429766974847,
+            "ci_high": 8.180579204159976,
+            "scenes": 1500,
+            "observations": 1500,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        }
+      },
+      "joint_minus_previous": {
+        "psnr": {
+          "mean": 0.3187948169708252,
+          "ci_low": 0.23336337286631267,
+          "ci_high": 0.40015732363065076,
+          "scenes": 1500,
+          "observations": 1500,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "ssim": {
+          "mean": 0.0050426886677742006,
+          "ci_low": 0.004146943397323291,
+          "ci_high": 0.005913411767284074,
+          "scenes": 1500,
+          "observations": 1500,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "delta_e76": {
+          "mean": -0.2414444445768992,
+          "ci_low": -0.3015106855054696,
+          "ci_high": -0.1819904543439548,
+          "scenes": 1500,
+          "observations": 1500,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "new_clipped_high_fraction": {
+          "mean": -0.0006286846288106365,
+          "ci_low": -0.0008888536997024857,
+          "ci_high": -0.0004000850621426556,
+          "scenes": 1500,
+          "observations": 1500,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "new_clipped_low_fraction": {
+          "mean": 0.00853019339237532,
+          "ci_low": 0.007248841595147072,
+          "ci_high": 0.009953867708273778,
+          "scenes": 1500,
+          "observations": 1500,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        }
+      },
+      "psnr_wins": 915
+    },
+    "original": {
+      "scenes": 824,
+      "models": {
+        "input": {
+          "psnr": {
+            "mean": 18.338934434849083,
+            "ci_low": 17.967522546214962,
+            "ci_high": 18.75817331273868,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.7905940775515385,
+            "ci_low": 0.7833434305732473,
+            "ci_high": 0.7977705010891105,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 16.297070286517005,
+            "ci_low": 15.784854310230145,
+            "ci_high": 16.792588122955802,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        },
+        "previous": {
+          "psnr": {
+            "mean": 23.980838562678365,
+            "ci_low": 23.671246409994886,
+            "ci_high": 24.30191376087735,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.895778493503633,
+            "ci_low": 0.8900322675433697,
+            "ci_high": 0.9012239432360217,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 8.346330285651012,
+            "ci_low": 8.056870593593537,
+            "ci_high": 8.640727924537456,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        },
+        "global": {
+          "psnr": {
+            "mean": 22.102270985112607,
+            "ci_low": 21.784666863517856,
+            "ci_high": 22.43219496897123,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.8685111398944287,
+            "ci_low": 0.8615038118863171,
+            "ci_high": 0.8751619866642268,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 10.081636350421073,
+            "ci_low": 9.726791073909952,
+            "ci_high": 10.444220705988627,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        },
+        "joint": {
+          "psnr": {
+            "mean": 24.32044219854966,
+            "ci_low": 24.01194566893346,
+            "ci_high": 24.637596866170178,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.9012908636438615,
+            "ci_low": 0.8954630035816611,
+            "ci_high": 0.9065770227642893,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 8.085688872389422,
+            "ci_low": 7.808316787122522,
+            "ci_high": 8.373765329846623,
+            "scenes": 824,
+            "observations": 824,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        }
+      },
+      "joint_minus_previous": {
+        "psnr": {
+          "mean": 0.3396036358712946,
+          "ci_low": 0.23400021507902055,
+          "ci_high": 0.4448323011687658,
+          "scenes": 824,
+          "observations": 824,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "ssim": {
+          "mean": 0.005512370140228456,
+          "ci_low": 0.004374291516334108,
+          "ci_high": 0.006696936763027339,
+          "scenes": 824,
+          "observations": 824,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "delta_e76": {
+          "mean": -0.2606414132615895,
+          "ci_low": -0.340002101789979,
+          "ci_high": -0.1790863718475821,
+          "scenes": 824,
+          "observations": 824,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "new_clipped_high_fraction": {
+          "mean": -0.0007417804638937491,
+          "ci_low": -0.0011560173030599767,
+          "ci_high": -0.0004003029224765596,
+          "scenes": 824,
+          "observations": 824,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "new_clipped_low_fraction": {
+          "mean": 0.008245379305336226,
+          "ci_low": 0.00653480176253952,
+          "ci_high": 0.010153567691544772,
+          "scenes": 824,
+          "observations": 824,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        }
+      },
+      "psnr_wins": 505
+    },
+    "additional": {
+      "scenes": 676,
+      "models": {
+        "input": {
+          "psnr": {
+            "mean": 18.504498145284032,
+            "ci_low": 18.18949954998211,
+            "ci_high": 18.81887556222769,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.794528540554484,
+            "ci_low": 0.7863581122477821,
+            "ci_high": 0.8019698083389705,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 16.081344508560452,
+            "ci_low": 15.551103176273537,
+            "ci_high": 16.6114613984728,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        },
+        "previous": {
+          "psnr": {
+            "mean": 24.304898538533045,
+            "ci_low": 23.999906978346186,
+            "ci_high": 24.62534842815625,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.9022802747565614,
+            "ci_low": 0.8962912230096625,
+            "ci_high": 0.9077806593155896,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 8.075684376722258,
+            "ci_low": 7.777371268767929,
+            "ci_high": 8.385107967522016,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        },
+        "global": {
+          "psnr": {
+            "mean": 22.337403509038438,
+            "ci_low": 21.98898550956207,
+            "ci_high": 22.704767667541844,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.8750502277915118,
+            "ci_low": 0.8685830489583534,
+            "ci_high": 0.8812788385801437,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 9.766356313016994,
+            "ci_low": 9.38152218200046,
+            "ci_high": 10.152347978808471,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        },
+        "joint": {
+          "psnr": {
+            "mean": 24.598328759684364,
+            "ci_low": 24.269443961325482,
+            "ci_high": 24.932049222211162,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "ssim": {
+            "mean": 0.9067504522803973,
+            "ci_low": 0.9008606939504926,
+            "ci_high": 0.9123018131376459,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          },
+          "delta_e76": {
+            "mean": 7.857639787465158,
+            "ci_low": 7.553488976684724,
+            "ci_high": 8.160873055704952,
+            "scenes": 676,
+            "observations": 676,
+            "bootstrap_samples": 2000,
+            "confidence": 0.95,
+            "seed": 20260918
+          }
+        }
+      },
+      "joint_minus_previous": {
+        "psnr": {
+          "mean": 0.29343022115131806,
+          "ci_low": 0.16090638895006576,
+          "ci_high": 0.4170837398111466,
+          "scenes": 676,
+          "observations": 676,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "ssim": {
+          "mean": 0.004470177523835876,
+          "ci_low": 0.0032287614761724983,
+          "ci_high": 0.005706936149643018,
+          "scenes": 676,
+          "observations": 676,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "delta_e76": {
+          "mean": -0.21804458925709921,
+          "ci_low": -0.30714451844346596,
+          "ci_high": -0.1258630793078764,
+          "scenes": 676,
+          "observations": 676,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "new_clipped_high_fraction": {
+          "mean": -0.0004908281671116946,
+          "ci_low": -0.0007538124178248426,
+          "ci_high": -0.0002157763045647968,
+          "scenes": 676,
+          "observations": 676,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        },
+        "new_clipped_low_fraction": {
+          "mean": 0.00887736322628096,
+          "ci_low": 0.006760613969825866,
+          "ci_high": 0.011127137058960505,
+          "scenes": 676,
+          "observations": 676,
+          "bootstrap_samples": 2000,
+          "confidence": 0.95,
+          "seed": 20260918
+        }
+      },
+      "psnr_wins": 410
+    }
+  },
+  "comparison_checkpoint_sha256": "1e60aaab4c95a9c3755a6d6f314c4c531b355d984dc8edab5c8f776c5e8d657a",
+  "elapsed_seconds": 282.220695687,
+  "estimated_training_function_usd": 0.33452559795432396,
+  "limitations": [
+    "Same epochs but more optimizer updates than the subset run",
+    "Custom 70/30 split and padded 256px metrics, not a published protocol",
+    "Original holdout has been inspected before; additional cohort was newly reserved",
+    "Single training seed; uncertainty is across test scenes, not training runs"
+  ]
+}

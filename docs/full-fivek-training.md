@@ -9,6 +9,8 @@ This experiment expands the existing 2,748-scene experiment to every one of the 
 
 The same 17 training and seven test scenes with A/B edits remain in their original partitions. There are 3,534 training pairs and 1,514 test pairs across the three styles; the primary evaluation uses only Expert C. Every version of a scene remains in one partition.
 
+The [frozen registry](../configs/splits/fivek_5000_7030.json) records every assignment, cohort, and source image hash. Its manifest SHA256 is `1d502cf6876a4161867bbe900a7bb4403d0f2d3f2ca9bbb7241f3a0271dd9bc2`.
+
 ## Acquisition and cache
 
 `modal_fivek_full.py` uses a CPU-only Modal function to inventory the archive and download only the 2,252 missing input/target pairs. It coalesces bounded HTTP ranges, verifies ZIP CRC32/size and SHA256, and checks input/target geometry during cache preparation. It uses the same source JPEG rendering and the existing EXIF/ICC-aware 256-pixel dataset loader. No new RAW rendering is introduced.
