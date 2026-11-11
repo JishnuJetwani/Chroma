@@ -1,4 +1,4 @@
-# Selective Grade
+# Chroma
 
 Automatic photo grading with a small CNN, learned color tables, and local exposure and contrast adjustments. Analyze a photo once, adjust the strength, and export at its original resolution. The app runs locally.
 
