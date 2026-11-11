@@ -1,102 +1,49 @@
-# Backlight architecture and renderer audit
+# Backlight architecture audit
 
-Research date: 2026-10-21. Read the current source and the `full-7030-20261012` run; ran small CPU diagnostics only. No training, cloud execution, or photo uploads. The source hashes for `models.py`, `renderer.py`, `data.py`, and `inference.py` match the deployed checkpoint metadata.
+The original JPEG checkpoint produces gray contours in a bright sky through its learned LUT. The global-only output reproduces the artifact, making the color transform the first component to address.
 
-## Main finding: fix the LUT contour artifact before adding model capacity
+## LUT response
 
-The visible gray contour islands in the washed-out sky are explained by a nonmonotonic **interpolated** global LUT response. They occur with the global grade alone. This is more actionable than a general claim that the CNN is too small.
+On a 4,097-point neutral ramp, **36.7% of RGB slopes above 0.9 are negative**; full-range slopes span −2.92 to +6.61. Between input codes 200 and 255, a one-code increase can produce a 0.00902 output decrease or a 0.01937 increase.
 
-For the scene-conditioned LUT from `runs/full-7030-20261012/joint/model.pt`, a dense 4,097-point neutral RGB ramp has negative per-channel slopes in **36.7% of samples above gray 0.9**. Across the complete ramp, slopes range from −2.92 to +6.61. A one-code increase in an 8-bit gray input between codes 200 and 255 can produce a decrease of 0.00902 or an increase of 0.01937 in an output channel. These are large enough to expose nearly invisible input quantization as bands.
+Near-white diagonal knots are increasing. Trilinear interpolation also uses off-diagonal vertices, whose incompatible values create oscillations between knots. The LUT's white endpoint is about 0.980.
 
-Crucially, the near-white diagonal LUT knots are monotonic. Trilinear interpolation blends six off-diagonal vertices as the neutral input travels between successive diagonal knots; those intervening values produce oscillations. The repeated intervals are about eight input codes, consistent with a 33-point LUT. Trilinear interpolation is continuous and does not itself invent ringing in a well-behaved table; the trained neighboring vertices are incompatible with a smooth neutral response.
+Tetrahedral interpolation removes the negative bright-neutral slopes for this table, with slopes 0.517–1.108. A separate 0.9–1.0 sweep measures 36.54% reversals for trilinear and zero for tetrahedral or Gaussian residual smoothing. Smoothing also moves the white endpoint: the five-cell filter changes it to about 0.952, motivating separate highlight protection.
 
-At neutral input 0.975, the derivative along the neutral axis is approximately [−1.16, −1.29, −1.46] for output RGB. At input 1.0, it is [5.22, 5.13, 5.55]. The white endpoint is [0.978416, 0.979253, 0.981824], so pure white is also turned light gray. Merely anchoring white does not repair the intervening reversals.
+The [ACES Common LUT Format](https://docs.acescentral.com/clf/specification/) describes tetrahedral partitioning along the main diagonal. Implemented helpers are in [lut_safety.py](../src/photograder/lut_safety.py), with tests for identity, affine transforms, grid vertices, gradients, smoothing, and CPU/MPS parity.
 
-An in-memory tetrahedral interpolation diagnostic, using the conventional cube diagonal shared by all six tetrahedra, eliminated negative neutral slopes above 0.9 for this LUT. Its slopes in that range were 0.517–1.108. It also removed such reversals for the earlier global checkpoint (trilinear negative fraction 16.1%; tetrahedral 0%). Global-only image RGB L1 difference between the two interpolators was 0.00329 for joint and 0.00280 for global. These are diagnostics, not a completed quality evaluation. Off-neutral artifacts remain possible, and the model was trained with trilinear interpolation.
+## Local controls and conditioning
 
-This construction follows the [ACES Common LUT Format specification](https://docs.acescentral.com/clf/specification/), which describes tetrahedral partitioning along the main, usually neutral, diagonal. The [ICC.2:2023 specification](https://www.color.org/specification/ICC.2-2023.pdf) likewise recommends including this diagonal edge to interpolate the neutral axis uniformly.
+The current local operator multiplies linear RGB according to exposure and log-luminance detail contrast. Broad additive color veils require a different operator. On the supplied photo, exposure ranges from −0.989 to +0.064 stops; contrast approaches its upper bound.
 
-The existing regularization is weak in this checkpoint: bank smoothness is 0.0008193 and monotonicity penalty is 0.0001548, contributing only about **8.2e−7 and 1.55e−6** after their respective loss weights. These penalties average across the entire cube and use unscaled grid differences; narrow, heavily used near-neutral regions can be problematic despite small global averages. Avoid increasing all-axis monotonicity indiscriminately: a useful saturation transform can legitimately have negative cross-channel derivatives. Penalizing reversals along luminance/neutral trajectories targets the observed failure more directly.
+The decoder uses encoder features, style, and graded luminance. Adding pooled context or absolute image statistics is a compact way to test whether it needs better exposure cues. The existing `global_context` option adds masked means/stds to the LUT mixer with 64 extra weights.
 
-## What the image and code establish
+The trained LUT bank is also highly correlated: one principal direction accounts for 97.64% of centered basis variance. The diverse initializer is a useful comparison before increasing the number of tables. [Context experiment](global-context-experiment.md).
 
-The supplied JPEG is 640×360. About 35.66% of pixels are RGB [255,255,255], 41.27% have at least one channel at 255, and 45.57% have all channels at least 250. A grading model can preserve a pleasing smooth glow and improve the foreground, but cannot recover texture already absent from this JPEG. This is a separate issue from the avoidable LUT artifact.
+## Preprocessing checks
 
-The local recipe has exposure min −0.989, max +0.064, mean −0.264 stops. Only 0.43% of its exposure samples exceed absolute 0.95; widening the exposure range is therefore not the first lever for this image. The contrast map has max 0.999994 and 22.87% of samples above 0.95. This suggests pressure against its contrast range, but raising that limit may amplify noise and the LUT contours.
+Training uses LANCZOS resizing; the app's model preview uses bilinear resizing. On this photo, the difference changes the final rendering by only 0.0000845 RGB MAE. LUT behavior is the larger effect. Aspect-ratio padding covers 43.75% of this 16:9 analysis canvas and participates in encoder pooling/normalization; masking those statistics is another controlled comparison.
 
-`renderer.py:137` applies a common scalar multiplier to linear RGB. Exposure lies in ±1 stop; the detail contrast gain lies between 0.5× and 2×. The model can brighten/darken and adjust an edge-preserving log-luminance detail layer. It cannot directly subtract a spatially varying additive color veil, and the local stage cannot independently change chromaticity. Global LUTs can alter color, but equal input colors receive the same global treatment regardless of location. A white shirt, sky, and flare with similar RGB values may need different corrections.
+## Cost
 
-`models.py:241` gives the local decoder normalized encoder features, a style embedding, and post-global luminance. It does not pass the pooled semantic/global representation to the local branch. GroupNorm communicates global moments indirectly, but that is not an explicit representation of scene context. The final encoder feature has a 91-pixel convolutional receptive field before decoder fusion, excluding the global dependence introduced by normalization. The decoder is already a small multiscale skip-connected network; replacing it with an unspecified U-Net is not a precise intervention.
+Convolution/linear MACs for one 256-square analysis, with three styles:
 
-`tonal_specialists=true` adds a head, but gates decisions by post-global brightness, not semantic role. In this scene a washed-out subject can fall in the highlight gate along with the sky. This flag alone is not a principled backlight classifier.
-
-## Conditioning, LUT capacity, and preprocessing
-
-The deployed configuration has `global_context=false`, `basis_init='legacy'`, and strength 0.02. The existing `_context` implementation supplies masked RGB and luminance means and standard deviations directly to the LUT mixer, bypassing GroupNorm. Turning it on adds only 64 weights. The checked-in `global_context_pilot.json` changes context, basis initialization, and initialization strength simultaneously; it is not an isolated context ablation. No completed result for that pilot was found.
-
-GroupNorm normalizes per-group sample statistics ([original paper](https://arxiv.org/abs/1803.08494)). Absolute photometric information is therefore less directly available after normalization, though biases, nonlinearities, borders, and channel relationships mean the encoder is not perfectly exposure invariant. A checkpoint diagnostic on uniform inputs 0.1–0.4 selected essentially the same LUT basis with weight approximately 0.9995. This is a warning sign rather than proof of failure on real photographs. HINet retains an unnormalized channel path in its restoration blocks ([paper](https://arxiv.org/abs/2105.06086)); that motivates an ablation, not a claim that its results transfer to this task.
-
-The legacy initialization varies each output channel by a scalar times its identity-shaped curve, so centered basis diversity initially spans at most three directions despite eight tables. In the trained bank, one principal direction accounts for **97.64%** of centered basis variance; the first four account for >99.998%. This could reflect redundant bases or naturally low-dimensional edits. It does not establish that eight bases are insufficient. The existing diverse initializer has a tested rank of seven. Evaluate it before doubling the table bank.
-
-The CNN/LUT approach is well motivated by [image-adaptive 3D LUTs](https://arxiv.org/abs/2009.14468), but the eight softmax weights constrain each image to the convex hull of the learned bases. A larger 65³ table would mostly add storage and sparse color-space degrees of freedom. [AdaInt](https://arxiv.org/abs/2204.13983) learns nonuniform sample intervals rather than uniformly increasing resolution; consider that only after conditioning and smoothness are demonstrably adequate.
-
-Training uses `PairedDataset`: EXIF/ICC conversion → one PIL LANCZOS resize to a maximum of 256 → edge-pad to a 256 square. The cloud cache preserves those exact uint8-derived values. App inference uses the same `load_srgb`, then a maximum-1024 LANCZOS thumbnail, then `models._preview` uses non-antialiased bilinear downsampling to 256. For this 640-wide image, the app therefore takes a direct bilinear resize where training used LANCZOS. Measured preview L1 difference was 0.001097, but LUT L1 difference was only 1.97e−6 and the rendered image difference 8.45e−5. This mismatch deserves cleanup, but **does not explain this failure**.
-
-Both paths edge-pad aspect-preserving previews. For this 16:9 photo, 43.75% of the encoder canvas is replicated padding; pooling and GroupNorm include it. The context flag correctly excludes padding through cropping/masks, but it does not mask CNN pooling or normalization. Small images below 256 also differ: the dataset does not upscale while `_preview` does. Training square-map filtering and inference cropped-map filtering can differ at content borders. These are measurable consistency concerns, not established primary defects. EXIF, ICC, channel order, 0–1 scaling, linear-light exposure, checkpoint evaluation mode, and one-recipe tiled rendering showed no obvious mismatch.
-
-The training population is 1,924 unique scenes and 1,958 rows: Expert C has 1,924 rows while A and B have only 17 each. The 16-dimensional style embedding is not a substitute for missing per-style examples. Validation was disabled and training used a fixed final schedule; aggregate test SSIM is not evidence of convergence or aesthetic quality on severe backlight.
-
-## Ranked isolated experiments
-
-Costs below are relative to the current three-style local model unless stated. Keep scene split, examples, optimizer schedule, seed, reconstruction loss, and input resize fixed within each ablation. Use an inner validation subset of the original training scenes for selection; retain the existing 824-scene outer test for the final comparison.
-
-| Priority | Exact isolated change | Parameters / compute | Decision evidence |
-|---|---|---|---|
-| 0a | Evaluate tetrahedral LUT interpolation with existing weights; do not alter local maps or smoothing simultaneously. If adopted for training, use it in both guide creation and native rendering. | 0 parameters; 4 vertex gathers versus 8, plus three-value sorting/selection. Actual CPU/MPS latency must be measured. | Dense neutral and near-neutral ramps, no new reversals/contours, scene comparisons, ordinary-photo color regression. |
-| 0b | Independently smooth **LUT residual from identity**, then add identity back. Start a 3³ Gaussian, one pass, sigma 1. Preserve identity exactly; avoid directly filtering the identity cube with replicate padding. | 0 parameters; small per-recipe 33³ convolution, same per-pixel render cost. | Ramp slopes and color error versus unsmoothed and tetrahedral variants. Smoothing may weaken intentional grading. |
-| 0c | For a glow-preservation policy, smoothly fade the final correction toward the original in near-white, low-chroma source regions. Test separately from 0a/0b. | 0 parameters, a few pointwise operations. | Exact preservation of clipped white, smooth transition, no whitening of genuine recovered textured highlights. A simple blend does not guarantee monotonicity: smoothstep 0.85–0.98 still had negative neutral slopes in this diagnostic. |
-| 1 | During retraining add sampled neutral/near-neutral ramp regularization: e.g. 257 gray samples plus fixed low-chroma offsets, penalize negative directional derivatives and excessive slope changes on the rendered LUT response. Normalize derivatives by sample spacing. Keep existing LUT regularizers initially fixed. | 0 parameters; thousands of LUT queries per basis or per minibatch, far cheaper than image rendering. | Remove measured oscillations without suppressing legitimate off-neutral saturation; report exact penalty scales. White-endpoint identity is a separate optional ablation. |
-| 2 | Set only `global_context=true`; retain legacy basis, strength, and all other settings. | +64 parameters; masked mean/std reductions and 64 extra mixer MACs. | Exposure sweep responsiveness, regional foreground error, preservation of bright background. |
-| 3 | From a fresh initialization compare `basis_init='diverse'` against legacy at **the same strength 0.02**. Then separately test strength 0.2. | 0 parameter/forward-compute change. | LUT rank, mixer entropy and image-to-image weight variation, ramps, validation image quality. Initializer changes do nothing if a trained bank is loaded over them. |
-| 4 | Enrich photometric conditioning with the existing eight statistics + 16 masked log-linear-luminance bins (−10 to 0 stops) + four sRGB-luminance tail fractions (<.05, <.2, >.95, >.99). Feed a 28→32 MLP to the mixer and a 32→64 FiLM head after the decoder's final normalized block. | +3,296 parameters versus original: 928 MLP, 256 mixer weights, 2,112 FiLM. About 3,200 small-network MACs plus histogram reductions and ~0.26M affine elementwise ops at 64². | Compare against an 8→32 statistics-only control; the added 20 descriptors alone cost 640 parameters. Histograms help distinguish exposure mixtures with similar mean/std. |
-| 5 | Retain exposure/contrast and add three zero-initialized local RGB residual outputs, e.g. ±0.05 sRGB, using existing `rgb_residual`/`residual_is_local` rendering. Add explicit residual magnitude/TV regularization because current map TV ignores RGB residuals. | +99 parameters and +0.393M MACs at 64², plus three interpolated maps and native additions. | Can local color/veil correction improve foreground without tinting sky/skin? This is a compact expressivity test. For a physically linear additive veil model, move the additive term into linear RGB in a later separate variant. |
-| 6 | Add semantic global conditioning to the local head: pooled encoder128 + style16 + existing stats8 → linear64 FiLM scale/bias, applied after final decoder normalization. Zero-initialize for exact initial behavior. | +9,792 parameters, ~9,728 vector MACs and ~0.26M affine operations. | Consistent correction across subject regions; removes the need for purely local features to infer the whole-scene exposure decision. |
-| 7 | Separate analysis resolution from loss resolution: keep predictor256/maps64, render supervised pairs at 512 using one shared resize policy. | 0 parameters; predictor MACs unchanged, renderer/loss pixels roughly 4×. | Haloing, fine branches/hair, and native-render stability. Increasing only `map_size` beyond64 interpolates an already64 decoder output; it does not add prediction detail. |
-
-Histogram conditioning is motivated by work using differentiable intensity histograms for color representation ([Kim et al., WACV 2022](https://openaccess.thecvf.com/content/WACV2022/html/Kim_Learning_Color_Representations_for_Low-Light_Image_Enhancement_WACV_2022_paper.html)). The particular bins and tiny MLP above are proposed controlled designs, not reproductions of that network.
-
-Warm-start hazard: `initialize_from_model` skips tensors whose shapes change. Turning on context skips the **entire mixer weight**, rather than copying its original 144 columns. Expanding the output head skips its existing rows. A fair fine-tuning experiment needs an explicit migration that copies old columns/rows and zero-initializes added parts, with a before-training output-equivalence check.
-
-## Larger changes only if the small experiments fail
-
-An existing bilateral model is a useful expressivity control, but it is not HDRNet: it has fixed luminance guidance, no explicit pooled global path, and a shallow grid head on f3. `global_context=true` currently has no effect for this architecture because the context is consumed only by the global LUT branch. Its renderer expands 96 grid coefficient planes before slicing: a 512² FP32 coefficient tensor alone is about 96 MiB. Small parameter count does not guarantee low runtime memory.
-
-[HDRNet](https://groups.csail.mit.edu/graphics/hdrnet/data/hdrnet.pdf) combines global and local feature paths, learned full-resolution guidance, and loss at full resolution. Its guidance ablation reports highlight posterization with fixed luminance for HDR+ reproduction. This supports a future **specific** bilateral experiment: add global FiLM and a learned pointwise guide, rather than labeling the current baseline a faithful reproduction. A 3→8→1 pointwise guide is 41 parameters but costs 32 MACs per native pixel; native cost matters.
-
-A spatial mixture of two image-specific LUTs with a learned one-channel gate is another compact option when identical colors need different regional treatment. It doubles per-pixel LUT lookup work, but can reuse the bank and add only eight mixer logits (1,160 parameters) and one gate output (33 parameters). [Spatial-aware LUTs](https://arxiv.org/abs/2108.08697) establish the broader principle of image-level plus pixel-level mixing. Start with two branches, not eight full-resolution basis renders.
-
-Coarse-to-fine exposure work explicitly separates color and detail ([Afifi et al., CVPR 2021](https://openaccess.thecvf.com/content/CVPR2021/html/Afifi_Learning_Multi-Scale_Photo_Exposure_Correction_CVPR_2021_paper.html)). A controlled analogue here is a second coarse detail scale or low-resolution affine branch, not a large generic restoration network. The current renderer uses a radius equivalent to five pixels at256; a broader-scale detail component could recover midscale contrast, but adds native guided-filter work and may amplify flare boundaries.
-
-## Isolated implementation and verification
-
-At the coordinator's request, added `src/photograder/lut_safety.py` and `tests/test_lut_safety.py`; existing renderer/model/inference/app files were not changed. The utility exposes `apply_tetrahedral_lut`, `smooth_lut_residual`, and JSON-friendly `diagnose_neutral_ramp`. Tetrahedral interpolation supports shared or per-image tables and intentional affine extrapolation outside [0,1]. Residual smoothing uses separable 1D convolutions for MPS compatibility.
-
-All eight targeted tests passed, including identity and affine transforms across six tetrahedra, out-of-range inputs, exact grid vertices, numerical input/LUT gradients, residual smoothing, mutation checks, synthetic ramp reversals, and actual CPU/MPS forward/backward parity. Targeted Ruff checks passed.
-
-With a separate 4,097-point sweep restricted to 0.9–1.0, the joint LUT's negative-slope fraction was 36.54%; tetrahedral, Gaussian3 residual smoothing, and Gaussian5 residual smoothing each measured 0%. Sampling differs slightly from the full-range diagnostic above. **Smoothing arbitrary LUTs does not anchor white**: Gaussian5 sigma1 changed this LUT's white endpoint from approximately0.980 to [0.95109,0.95175,0.95224]. Protecting source glow or anchoring endpoints remains a separate decision; the utility guarantees exact preservation only when the input table itself is identity.
-
-## Measured model costs and acceptance criteria
-
-Hook-counted convolution/linear MACs for one256-square analysis, excluding interpolation, norms, activations, LUT mixing and rendering:
-
-| Existing architecture, three styles | Parameters | Conv/linear MACs |
+| Architecture | Parameters | MACs |
 |---|---:|---:|
 | Global | 1,447,280 | 0.694G |
-| Local/current | 1,711,058 | 1.205G |
-| Preview RGB residual (`unet`) | 847,443 | 1.205G |
+| Local | 1,711,058 | 1.205G |
+| Preview RGB residual | 847,443 | 1.205G |
 | Bilateral | 597,648 | 0.697G |
 | Cascade | 3,142,100 | 3.103G |
 
-Current parameter allocation: encoder583,584; decoder263,778; LUT bank862,488; mixer1,160; style48. At fixed bank count, reducing LUT dimension33→17 saves744,576 parameters, yielding966,482 total. Consider it as a smoothness/storage ablation, not a promised accuracy gain. Increasing predictor resolution256→384 multiplies convolution cost by about2.25×; 512 multiplies it by4×.
+These counts exclude interpolation, normalization, activations, LUT mixing, and rendering. Reducing LUT size from 33³ to 17³ removes 744,576 parameters. Increasing the CNN preview from 256 to 384 multiplies convolution cost by about 2.25.
 
-Evaluate ordinary photos and a separately defined severe-backlight slice. Include near-neutral ramps and low-chroma offset ramps, foreground/skin color error where paired targets exist, sky-gradient smoothness, clipped-white preservation, overshoot, halos, noise amplification, edit localization, and full-resolution timing/memory. Report paired perceptual comparisons alongside PSNR/SSIM. Do not select on this one user's JPEG or turn missing clipped detail into a target for invented reconstruction. The immediate goal is a smooth, restrained edit that preserves the existing glow.
+## Experiments
+
+1. Compare shape losses and monotone luminance curves using fixed data and updates.
+2. Vary absolute context and LUT initialization independently.
+3. Add one low-frequency affine/veil field if multiplicative controls remain insufficient.
+4. Compare a two-LUT spatial mixture or a bilateral model with pooled context and learned guidance.
+5. Separate predictor resolution from rendering/loss resolution and inspect native boundaries.
+
+[HDRNet](https://groups.csail.mit.edu/graphics/hdrnet/) and [spatial-aware LUTs](https://arxiv.org/abs/2108.08697) provide references for the spatial alternatives. Evaluate neutral ramps, saturated colors, white clothing, hair/sky edges, noise, and ordinary photographs alongside reconstruction scores. Completed inference experiments are in the [backlight report](backlight-next-steps.md).

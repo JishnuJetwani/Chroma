@@ -1,19 +1,19 @@
-# README examples
+# Example images
 
-Each comparison shows the input on the left and the result on the right. These are selected visual examples, not a separate quantitative evaluation.
+Each comparison shows the input on the left and the graded output on the right.
 
-| Image | Source | Result |
+| Image | Source | Model |
 |---|---|---|
-| `flower-before-after.png` | MIT–Adobe FiveK, `a0041-IMG_4972` | Saved JPEG model output, Expert C style, grade and local strengths both 1. |
-| `paris-before-after.png` | MIT–Adobe FiveK, `a1971-NKIM_MG_6152` | Saved JPEG model output, Expert C style, grade and local strengths both 1. |
-| `rainy-street-before-after.png` | Supplied before/after screenshot | Displayed as provided. |
+| [Flower](flower-before-after.png) | FiveK `a0041-IMG_4972` | Original JPEG checkpoint, Expert C style, both strengths at 1 |
+| [Paris at night](paris-before-after.png) | FiveK `a1971-NKIM_MG_6152` | Original JPEG checkpoint, Expert C style, both strengths at 1 |
+| [Rainy street](rainy-street-before-after.png) | Jishnu Jetwani's photo of DC at the University of Waterloo | Supplied before/after comparison |
 
-The flower and Paris comparisons use the checkpoint documented in the [model card](../model-card.md). The right-hand images are model outputs, not the expert targets. The saved comparison files and supplied screenshot are copied without image edits.
+The [model card](../model-card.md) identifies the original JPEG checkpoint. The saved comparisons are displayed unchanged.
 
-## FiveK image permissions
+## Image credits
 
-The flower image is Copyright (C) 2011 Adobe Systems Incorporated and Copyright (C) 2011 Massachusetts Institute of Technology; its [Adobe/MIT research license](LicenseAdobeMIT.txt) text is included.
+The flower is © 2011 Adobe Systems Incorporated and Massachusetts Institute of Technology, under the [Adobe/MIT research license](LicenseAdobeMIT.txt).
 
-The Paris image is Copyright (C) 2011 Adobe Systems Incorporated; its [Adobe research license](LicenseAdobe.txt) text is included.
+The Paris image is © 2011 Adobe Systems Incorporated, under the [Adobe research license](LicenseAdobe.txt).
 
-These licenses apply to the source photographs and derived previews, restrict use to research without commercial advantage, and do not grant a license to this project's code. See the [official dataset](https://data.csail.mit.edu/graphics/fivek/) for the original photographs and file-applicability lists.
+Both licenses restrict use to research without commercial advantage. See the [FiveK dataset](https://data.csail.mit.edu/graphics/fivek/) for the original photographs and file-applicability lists.

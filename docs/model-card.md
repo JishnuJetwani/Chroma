@@ -1,40 +1,33 @@
 # JPEG model card
 
-## Intended use
+Chroma predicts a global color LUT and local exposure/contrast maps from a photo preview. The renderer applies that recipe at the original resolution, with separate strength controls for the overall grade and local adjustments.
 
-Local JPEG/PNG photo grading for a personal research project. The model predicts a global color LUT and spatial exposure/contrast maps. It cannot restore image detail destroyed by clipping or guarantee a preferred aesthetic.
+## Checkpoints
 
-## Checkpoint
+Both models have **1,711,058 parameters** and styles for FiveK editors C, A, and B. Expert C supplies most of the training data; A and B each have 17 training scenes.
 
-- Local source: `runs/full-7030-20261012/joint/model.pt`.
-- Portable installation: `checkpoints/jpeg.pt`.
-- SHA256: `1e60aaab4c95a9c3755a6d6f314c4c531b355d984dc8edab5c8f776c5e8d657a`.
-- Parameters: 1,711,058.
-- Styles: FiveK Expert C, A, B. Expert C is the recommended style; A/B have very little training data.
-- Format: PyTorch tensor-only checkpoint, loaded with `weights_only=True` and strict state-dictionary checks.
+| Checkpoint | Training scenes | Test scenes | PSNR | SSIM |
+|---|---:|---:|---:|---:|
+| Full FiveK | 3,500 | 1,500 | 24.45 dB | 0.9038 |
+| Original JPEG, used in the flower and Paris examples | 1,924 | 824 | 23.98 dB | 0.8958 |
 
-No checkpoint is hosted yet. A fresh source checkout requires a separately supplied checkpoint or a training run. To package the existing weights for a future release:
+Each row uses its own Expert C holdout. The [full FiveK report](reports/full-fivek.md) compares both models on the same 1,500 photos.
 
-```bash
-uv run --no-sync python scripts/package_model.py \
-  --checkpoint runs/full-7030-20261012/joint/model.pt \
-  --output dist/selective-grade-jpeg-v0.1.0.zip
-```
+SHA256 checksums:
 
-The archive contains `checkpoints/jpeg.pt`, its checksum/configuration, and this model card. Extract it into the project root. Packaging does not upload or publish the archive.
+- Full FiveK: `90781d57ff40e0cb1416bbde97b0179f9409340743f44f4da0e5dc8a6d00693c`
+- Original JPEG: `1e60aaab4c95a9c3755a6d6f314c4c531b355d984dc8edab5c8f776c5e8d657a`
 
-## Training and evaluation
+Weights are available on request at **jjetwani@uwaterloo.ca**. Save the supplied checkpoint as `checkpoints/jpeg.pt`, or pass its location with `--checkpoint`. The loader uses `weights_only=True` and checks the state dictionary against the model configuration.
 
-The prepared FiveK collection contains 2,748 scenes. The custom frozen 70/30 split has 1,924 training and 824 test scenes; all editor variants stay with their source scene. There are 1,958 training pairs after including a small matched editor A/B subset.
+## Training
 
-The curriculum is ten global epochs, five synthetic local-repair epochs, and ten joint epochs. The final checkpoint is selected by the fixed schedule without test-based tuning. Training used a single H100, FP32 rendering, and batch eight. The recorded GPU function work was about 364 seconds; this excludes data preparation and is not a bill.
+The curriculum trains the global grade for ten epochs, local repair for five, and the joint model for ten. Both runs use AdamW, learning rate 0.0002, weight decay 0.0001, FP32, and batch eight on one H100. The final checkpoint follows the fixed schedule. All edits of a source photo share a partition.
 
-The primary Expert C test result is **23.9808 dB PSNR, 0.8958 SSIM, and 8.346 CIE76 color difference**. These are reference-matching metrics, not quality percentages. Evaluation uses padded 256-pixel inputs with valid-content masks. See [the report](reports/jpeg.md) and [machine-readable results](reports/jpeg-metrics.json).
+Inputs and Expert C targets use the prepared 480p release from [Image-Adaptive 3D LUTs](https://github.com/HuiZeng/Image-Adaptive-3DLUT). Additional A/B targets come from official expert renditions. Evaluation uses valid image content on a padded 256-pixel canvas and a custom 70/30 split.
 
-## Limits and provenance
+See the [full FiveK protocol](full-fivek-training.md), [original JPEG report](reports/jpeg.md), and [data guide](data.md). The full-data model has slightly more shadow clipping than its predecessor. Strong backlight can also expose LUT banding; the [backlight investigation](backlight-next-steps.md) documents that case.
 
-The global comparison has fewer training updates. The run does not establish causal benefits from preservation training, convergence, superiority over published methods, or broad camera generalization. Newly clipped highlight pixels increased relative to the global baseline. Brightening alone can explain much of the benefit on some examples.
+The [packaging helper](../scripts/package_model.py) accepts the original JPEG checkpoint and checks its hash before creating a portable archive.
 
-Inputs and Expert C targets came from the prepared 480p FiveK release documented by [Image-Adaptive 3D LUTs](https://github.com/HuiZeng/Image-Adaptive-3DLUT); the additional A/B targets came from official expert renditions. The source files and their checksums remain in local dataset manifests. Split identities are retained in `configs/splits/cloud_full_7030.json`.
-
-The code is currently unlicensed. Dataset terms and attribution requirements remain separate; no commercial-use permission for these weights is granted by this project. Consult the original [FiveK terms](https://data.csail.mit.edu/graphics/fivek/).
+The code is unlicensed. Training data and derived materials retain the [FiveK research terms](https://data.csail.mit.edu/graphics/fivek/).

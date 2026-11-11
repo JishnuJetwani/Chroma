@@ -1,45 +1,24 @@
-# Optional repair supervision and combined-fault curriculum
+# Repair supervision experiment
 
-**Status: implemented and unit-tested, not trained as a photo experiment.**
-`configs/repair_supervised_pilot.json` enables two independently configurable
-additions to the repair stage. Existing configurations keep both disabled.
+**Status: implemented and tested; photo-training run pending.**
 
-- `training.combined_faults_after_micro_step` defaults to `null`. An integer
-  enables combined faults starting at that zero-based training microbatch index,
-  before gradient accumulation. The optional configuration uses 128: with 128
-  images and batch size two, this introduces combinations after two epochs.
-  The existing corruption generator then samples two operations for 35% of
-  non-identity examples. The rule also applies to synthetic batches in joint
-  training if explicitly configured there.
-- `loss.exposure_aux` defaults to zero. A positive value adds a validity-masked
-  L1 loss in exposure stops **only during repair training**, using the generator's
-  known inverse for pure exposure faults and the zero inverse for identity
-  examples. Contrast and combined faults have unknown inverse labels and
-  contribute zero. Human-edited pairs never provide inferred inverse labels.
+[repair_supervised_pilot.json](../configs/repair_supervised_pilot.json) adds a combined-fault curriculum and direct exposure supervision to the repair stage.
 
-The exposure loss supervises the full-resolution exposure field after the
-renderer's actual guided/bilinear upsampling and bounds, not a differently
-resized target map. This preserves operator consistency, but a low-resolution
-smooth model cannot represent every synthetic inverse exactly. The optional
-weight is 0.05. This does not add a contrast inverse label or a new penalty
-forcing contrast parameters toward identity.
+| Setting | Default | Experiment |
+|---|---|---|
+| `training.combined_faults_after_micro_step` | `null` | `128`: begin combinations after two epochs at batch two over 128 images |
+| `loss.exposure_aux` | `0` | `0.05`: supervise the known inverse exposure field |
 
-The auxiliary applies to recipes with one exposure map (including the shared
-local model); cascade and RGB/grid-only recipes receive zero. It covers valid
-pixels outside the fault as well, where known inverse exposure is zero, and
-excludes padding/privacy pixels. The global grading branch remains bypassed.
+After the curriculum threshold, 35% of non-identity examples receive two operations. The exposure loss applies to pure exposure faults and unchanged examples, whose inverse labels are known. Contrast and combined faults contribute zero to this auxiliary term.
 
-Validation remains a fixed single-fault/identity protocol with the same seed
-rule and families throughout training, regardless of the training curriculum.
-Its settings are recorded in checkpoint metadata. Changing the curriculum or
-auxiliary loss requires a new experiment, rather than changing a resumed run.
+Supervision uses the rendered exposure field after upsampling and bounds. Valid pixels outside the fault have a zero exposure target; padding and privacy masks are excluded. The global branch remains bypassed during repair. This auxiliary supports recipes with a single exposure map.
 
-```sh
-photograder train --config configs/repair_supervised_pilot.json \
-  --initialize runs/global_pilot/best.pt
+Prepare the [preview manifest](data.md#rebuild-the-development-split), train the preview global baseline, then start the repair experiment:
+
+```bash
+uv run --no-sync photograder train --config configs/preview/global.json --device auto
+uv run --no-sync photograder train --config configs/repair_supervised_pilot.json \
+  --initialize runs/preview_reproduction/global/best.pt --device auto
 ```
 
-This combined configuration cannot isolate the effect of supervision from the
-effect of combined faults. Run separate settings with just one enabled, using
-the same starting global checkpoint, data, update budget, and evaluation protocol.
-No improvement in real-photo correction or research novelty is claimed.
+Validation keeps the same single-fault/identity protocol throughout training. Compare each addition separately using the same initialization, data, and update budget before testing both together. A changed curriculum or loss starts a new run.

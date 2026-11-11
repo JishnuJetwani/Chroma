@@ -1,5 +1,5 @@
-# RAW implementation and pilot results
+# RAW results
 
-The measured report is [RAW pilot: implementation and results](reports/raw.md).
+The [RAW pilot report](reports/raw.md) contains the four-model comparison, native export checks, and timings. The selected shared model reaches 23.11 dB PSNR on 32 validation scenes.
 
-The current local app defaults to the shared RAW model. Research rationale and next systems are in [RAW direction](raw-direction.md).
+See [RAW usage](usage.md#raw-developer) to load a checkpoint and [RAW direction](raw-direction.md) for follow-up experiments.

@@ -1,14 +1,14 @@
 # Documentation
 
-Start with the [project README](../README.md) to run the JPEG app.
+- [Usage](usage.md): installation, app, local training, and evaluation.
+- [Model card](model-card.md): JPEG checkpoints, checksums, and training settings.
+- [Full FiveK results](reports/full-fivek.md): the latest 3,500/1,500 experiment.
+- [Data preparation](data.md) and [full FiveK training](full-fivek-training.md).
+- [Modal workflow](modal_training.md): cloud setup and the earlier subset run.
+- [Experiments](experiments.md): configurations, metrics, and blind comparisons.
+- [Research](research.md): architecture, related work, and next experiments.
+- [Pilot results](results.md) and [pilot paper draft](paper.md).
+- [Backlight investigation](backlight-next-steps.md).
+- [RAW results](reports/raw.md), [model](raw-model-research.md), [decoder](raw-pipeline-research.md), and [data](raw-data-research.md).
 
-- [Model card](model-card.md): checkpoint identity, training protocol, and limitations.
-- [JPEG benchmark](reports/jpeg.md) and [metrics](reports/jpeg-metrics.json).
-- [Complete FiveK results](reports/full-fivek.md), [metrics](reports/full_fivek_summary.json), and [training protocol](full-fivek-training.md).
-- [Training and research workflow](usage.md): full commands and experimental options.
-- [Data preparation](data.md) and [Modal training](modal_training.md).
-- [Architecture and related work](research.md), [experiment protocols](experiments.md), and [pilot results](results.md).
-- [Experimental RAW results](reports/raw.md) and [RAW direction](raw-direction.md).
-- [Backlight experiments](backlight-next-steps.md): findings and proposals, not default model behavior.
-
-Research notes describe the runs and checks performed at the dates they record. References shown as local artifact paths require the original data/run directories, which are deliberately excluded from Git. A proposal in a research note is not an implemented or validated feature.
+Commands run from the repository root. Dataset files, checkpoints, and run outputs are created during acquisition or training and are excluded from Git. The guides identify these prerequisites; tracked reports and split registries contain the published results and scene assignments.

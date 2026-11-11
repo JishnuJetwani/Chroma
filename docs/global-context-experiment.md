@@ -1,26 +1,17 @@
-# Optional global context experiment
+# Global context experiment
 
-**Status: configured, not run on FiveK.** `configs/global_context_pilot.json`
-adds masked RGB/luminance means and standard deviations to the LUT mixer and
-uses diverse, identity-centered LUT bases with initialization strength 0.2.
-It uses the same preview manifest, 128 training images, 32 validation images,
-256-pixel rendering, and ten-epoch budget as the preview global baseline.
+**Status: configured; FiveK training pending.**
 
-The earlier global pilot showed little image-dependent variation in its mixing
-weights. A controlled 20-step CPU diagnostic confirmed that the legacy model
-can learn conditional behavior; stronger diverse initialization improved that
-toy task, while context alone made little difference. This does not establish
-better real-photo grading. See `runs/diagnostics/global_context.json` for the
-local diagnostic record when available.
+The early global pilot produced nearly constant LUT mixing weights. This experiment adds absolute image statistics to the mixer and increases diversity in the initial LUT bank.
 
-Run from scratch to preserve the requested initialization:
+[global_context_pilot.json](../configs/global_context_pilot.json) enables masked RGB/luminance means and standard deviations, identity-centered diverse bases, and initialization strength 0.2. It uses 128 training and 32 validation images, 256-pixel rendering, and ten epochs.
 
-```sh
-photograder train --config configs/global_context_pilot.json
+A 20-step CPU conditioning diagnostic improved with diverse initialization; context alone had little effect. The next comparison should vary those two settings independently.
+
+After preparing the [preview manifest](data.md#rebuild-the-development-split), train from scratch:
+
+```bash
+uv run --no-sync photograder train --config configs/global_context_pilot.json --device auto
 ```
 
-Do not use `--initialize` for the initial comparison: transferring an existing
-LUT bank overrides the diverse initialization. Evaluate the resulting checkpoint
-on exactly the same split, image size, controls, and metric version as the
-baseline. Isolating context from initialization requires separate ablations;
-this combined configuration alone cannot attribute a gain to either change.
+Starting from fresh weights preserves the intended LUT initialization. Evaluate with the same scenes, resolution, and metrics as the global baseline.
